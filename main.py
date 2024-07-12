@@ -1,0 +1,223 @@
+import cv2
+import numpy as np
+import time
+import torch
+from transformers import YolosImageProcessor, YolosForObjectDetection
+from PIL import Image
+
+# Hyperparameters
+ASPECT_RATIO_MIN = 1.5
+ASPECT_RATIO_MAX = 2.5
+DEBUG_VIEW = True
+AREA_THRESHOLD = 1000
+DISTANCE_THRESHOLD = 50  # Distance threshold to group writing areas
+STABILITY_THRESHOLD = 10  # Pixels threshold for movement
+CONFIRMATION_TIME = 10  # Seconds to confirm chalkboard stability
+REAPPEARANCE_TIME = 0.5  # Seconds to allow brief periods without detection
+CUSHION = 10  # Pixels to reduce the chalkboard's bounding box for average color calculation
+
+# Initialize YOLOS model for person detection
+person_model = YolosForObjectDetection.from_pretrained('hustvl/yolos-tiny')
+image_processor = YolosImageProcessor.from_pretrained('hustvl/yolos-tiny')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+person_model.to(device)
+
+def detect_chalkboard(frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    adaptive_thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                            cv2.THRESH_BINARY_INV, 11, 2)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    morph = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(morph, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    
+    for contour in contours:
+        approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        if len(approx) == 4 and cv2.contourArea(approx) > AREA_THRESHOLD:
+            x, y, w, h = cv2.boundingRect(approx)
+            aspect_ratio = w / float(h)
+            if ASPECT_RATIO_MIN < aspect_ratio < ASPECT_RATIO_MAX:
+                return (x, y, w, h), approx
+    return None, None
+
+def calculate_average_color(frame, chalkboard):
+    x, y, w, h = chalkboard
+    cushioned_x = x + CUSHION
+    cushioned_y = y + CUSHION
+    cushioned_w = w - 2 * CUSHION
+    cushioned_h = h - 2 * CUSHION
+    roi = frame[cushioned_y:cushioned_y + cushioned_h, cushioned_x:cushioned_x + cushioned_w]
+    average_color = cv2.mean(roi)[:3]
+    return average_color
+
+def detect_writing(frame, chalkboard, average_color):
+    x, y, w, h = chalkboard
+    chalkboard_roi = frame[y:y+h, x:x+w]
+    gray_roi = cv2.cvtColor(chalkboard_roi, cv2.COLOR_BGR2GRAY)
+    
+    edges = cv2.Canny(gray_roi, 50, 150)
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilated_edges = cv2.dilate(edges, kernel, iterations=2)
+    
+    contours, _ = cv2.findContours(dilated_edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    
+    boxes = []
+    for contour in contours:
+        if cv2.contourArea(contour) > AREA_THRESHOLD:
+            bx, by, bw, bh = cv2.boundingRect(contour)
+            boxes.append((bx, by, bw, bh))
+    
+    return boxes
+
+
+def group_boxes(boxes, distance_threshold):
+    def overlap(box1, box2):
+        return not (box1[0] + box1[2] < box2[0] - distance_threshold or
+                    box1[0] - distance_threshold > box2[0] + box2[2] or
+                    box1[1] + box1[3] < box2[1] - distance_threshold or
+                    box1[1] - distance_threshold > box2[1] + box2[3])
+    
+    grouped_boxes = []
+    while boxes:
+        box = boxes.pop(0)
+        group = [box]
+        i = 0
+        while i < len(boxes):
+            if overlap(box, boxes[i]):
+                group.append(boxes.pop(i))
+            else:
+                i += 1
+        grouped_boxes.append(group)
+    
+    merged_boxes = []
+    for group in grouped_boxes:
+        x_min = min([b[0] for b in group])
+        y_min = min([b[1] for b in group])
+        x_max = max([b[0] + b[2] for b in group])
+        y_max = max([b[1] + b[3] for b in group])
+        merged_boxes.append((x_min, y_min, x_max - x_min, y_max - y_min))
+    
+    return merged_boxes
+
+def detect_person(frame):
+    pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    inputs = image_processor(images=pil_image, return_tensors='pt').to(device)
+    outputs = person_model(**inputs)
+
+    target_sizes = torch.tensor([pil_image.size[::-1]], device=device)
+    results = image_processor.post_process_object_detection(outputs, threshold=0.9, target_sizes=target_sizes)[0]
+    
+    for score, label, box in zip(results['scores'], results['labels'], results['boxes']):
+        if person_model.config.id2label[label.item()] == 'person':
+            box = [round(i, 2) for i in box.tolist()]
+            return int(box[0]), int(box[1]), int(box[2] - box[0]), int(box[3] - box[1])
+    return None
+
+# Initialize the webcam
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Error: Could not open webcam.")
+    exit()
+
+chalkboard_coords = None
+chalkboard_corners = None
+chalkboard_confirmed = False
+start_time = None
+last_detection_time = None
+average_color = None
+writing_boxes = []
+confirmed_writing = []
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to grab frame.")
+        break
+
+    if not chalkboard_confirmed:
+        detected_chalkboard, detected_corners = detect_chalkboard(frame)
+        if detected_chalkboard:
+            x, y, w, h = detected_chalkboard
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(frame, 'Detecting Chalkboard', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            print("Chalkboard detected, verifying stability...")
+
+            if chalkboard_coords:
+                prev_x, prev_y, prev_w, prev_h = chalkboard_coords
+                if (abs(prev_x - x) < STABILITY_THRESHOLD and 
+                    abs(prev_y - y) < STABILITY_THRESHOLD and 
+                    abs(prev_w - w) < STABILITY_THRESHOLD and 
+                    abs(prev_h - h) < STABILITY_THRESHOLD):
+                    if not start_time:
+                        start_time = time.time()
+                    elif time.time() - start_time > CONFIRMATION_TIME:
+                        chalkboard_confirmed = True
+                        chalkboard_coords = detected_chalkboard
+                        chalkboard_corners = detected_corners
+                        average_color = calculate_average_color(frame, chalkboard_coords)
+                        print(f'Chalkboard confirmed at {chalkboard_coords}')
+                else:
+                    start_time = None
+                last_detection_time = time.time()
+            else:
+                chalkboard_coords = detected_chalkboard
+                chalkboard_corners = detected_corners
+                start_time = time.time()
+                last_detection_time = time.time()
+        else:
+            if last_detection_time and time.time() - last_detection_time < REAPPEARANCE_TIME:
+                print("Chalkboard temporarily lost, waiting for reappearance...")
+            else:
+                start_time = None
+
+    if chalkboard_confirmed:
+        x, y, w, h = chalkboard_coords
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(frame, 'Chalkboard', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        # Draw stability threshold circles on corners
+        for corner in chalkboard_corners:
+            cx, cy = corner[0][0], corner[0][1]
+            cv2.circle(frame, (cx, cy), STABILITY_THRESHOLD, (0, 255, 255), 2)
+        
+        # Detect writing within the chalkboard
+        writing_boxes = detect_writing(frame, chalkboard_coords, average_color)
+        grouped_boxes = group_boxes(writing_boxes, DISTANCE_THRESHOLD)
+        
+        for gx, gy, gw, gh in grouped_boxes:
+            cv2.rectangle(frame[y:y+h, x:x+w], (gx, gy), (gx + gw, gy + gh), (255, 0, 0), 2)
+        
+        # Confirm writing if it remains stable over time
+        current_time = time.time()
+        for box in grouped_boxes:
+            if box in confirmed_writing:
+                continue
+            stable = True
+            for confirmed_box in confirmed_writing:
+                if overlap(box, confirmed_box):
+                    stable = False
+                    break
+            if stable:
+                confirmed_writing.append(box)
+                print(f'Writing confirmed at {box}')
+        
+        for box in confirmed_writing:
+            gx, gy, gw, gh = box
+            cv2.rectangle(frame[y:y+h, x:x+w], (gx, gy), (gx + gw, gy + gh), (0, 255, 0), 2)
+            cv2.putText(frame, 'Writing', (gx, gy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        person_box = detect_person(frame)
+        if person_box:
+            px, py, pw, ph = person_box
+            cv2.rectangle(frame, (px, py), (px + pw, py + ph), (0, 0, 255), 2)
+            cv2.putText(frame, 'Person', (px, py - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    # Display the resulting frame
+    cv2.imshow('Chalkboard and Writing Detection', frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
