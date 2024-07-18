@@ -6,18 +6,11 @@ from transformers import YolosImageProcessor, YolosForObjectDetection
 from PIL import Image
 import requests
 import os
-from io import BytesIO
-import base64
-import openai
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 HF_TOKEN = os.getenv('HF_TOKEN')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# Initialize OpenAI client
-openai.api_key = OPENAI_API_KEY
 
 # Hyperparameters
 ASPECT_RATIO_MIN = 1.5
@@ -35,8 +28,6 @@ CUSHION = 10  # Pixels to reduce the chalkboard's bounding box for average color
 WRITING_CHECK_INTERVAL = 5  # Seconds interval to recheck for new writing
 TEXT_DETECTION_URL = "https://aleale2423-textdetector.hf.space/detect"
 MARGIN = 10  # Extra pixels for the aggregated bounding box
-AREA_CHANGE_THRESHOLD = 0.2  # Minimum percentage change in area to trigger LaTeX conversion (20%)
-DETAIL_LEVEL = "low" # low, high, auto are the options for detail level for gpt to process the image
 
 # Initialize YOLOS model for person detection if enabled
 if PERSON_DETECTION:
@@ -122,63 +113,6 @@ def merge_boxes(boxes, margin, x_max, y_max):
 
     return [(x_min, y_min, x_max_box - x_min, y_max_box - y_min)]
 
-def analyze_image_with_question(image, question):
-    """
-    Send an image to OpenAI Vision API and ask a question about it.
-
-    Args:
-        image (numpy array): The image data.
-        question (str): The question to ask about the image.
-
-    Returns:
-        str: The answer to the question about the image.
-    """
-    
-    # Encode the image in base64
-    _, img_encoded = cv2.imencode('.png', image)
-    img_bytes = img_encoded.tobytes()
-    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-    img_data_uri = f"data:image/png;base64,{img_base64}"
-
-    # Create the payload with the image and question
-    payload = {
-        "model": "gpt-4o",
-        "response_format": { "type": "json_object" },
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": question,
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": img_data_uri,
-                            "detail": DETAIL_LEVEL,
-                        },
-                    },
-                ],
-            }
-        ]
-    }
-    
-    # Send the payload to the API
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}"
-    }
-    
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-    response.raise_for_status()
-    l_dict = response.json()['choices'][0]['message']['content']
-
-    if isinstance(l_dict, dict) and len(list(l_dict.values())) > 0:
-        return list(l_dict.values())[0]
-    else:
-        return "no text detected"
-
 # Initialize the webcam or video feed
 if DEBUG_FEED:
     cap = cv2.VideoCapture(VIDEO_PATH)
@@ -197,7 +131,6 @@ last_detection_time = None
 average_color = None
 writing_boxes = []
 last_writing_check = 0
-last_area = None
 
 while True:
     ret, frame = cap.read()
@@ -267,20 +200,11 @@ while True:
             merged_box = merge_boxes(writing_boxes, margin=MARGIN, x_max=w, y_max=h)
         else:
             merged_box = []
-
+        
         for gx, gy, gw, gh in merged_box:
             cv2.rectangle(frame[y:y+h, x:x+w], (gx, gy), (gx + gw, gy + gh), (255, 0, 0), 2)
             if DEBUG_VIEW:
                 cv2.putText(frame, 'Writing', (gx, gy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-            # Calculate the area of the current and previous bounding boxes
-            current_area = gw * gh
-            if last_area is None or abs(current_area - last_area) / last_area >= AREA_CHANGE_THRESHOLD:
-                # Extract the writing ROI and send to OpenAI for LaTeX conversion
-                writing_roi = frame[y+gy:y+gy+gh, x+gx:x+gx+gw]
-                latex_text = analyze_image_with_question(writing_roi, "Please write what is written on this chalkboard in latex, just return the full text in latex within a JSON object of the form {'latex': 'your latex text'}")
-                print(f"Latex Text detected: {latex_text}")
-            last_area = current_area
 
         if PERSON_DETECTION:
             person_box = detect_person(frame)
@@ -298,4 +222,3 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
