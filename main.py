@@ -195,37 +195,7 @@ def detect_orange_circle(frame):
                 return int(x), int(y), int(radius)
     return None, None, None
 
-# Initialize the webcam or video feed
-if DEBUG_FEED:
-    cap = cv2.VideoCapture(VIDEO_PATH)
-else:
-    cap = cv2.VideoCapture(0)
-
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
-
-chalkboard_coords = None
-chalkboard_corners = None
-chalkboard_confirmed = False
-start_time = None
-last_detection_time = None
-average_color = None
-writing_boxes = []
-last_writing_check = 0
-last_area = None
-ignored_oranges = []
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        if DEBUG_FEED:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop the video
-            continue
-        else:
-            print("Failed to grab frame.")
-            break
-
+def process_frame(frame, chalkboard_coords, chalkboard_corners, chalkboard_confirmed, start_time, last_detection_time, average_color, writing_boxes, last_writing_check, last_area, ignored_oranges, chalkboard_roi):
     if not chalkboard_confirmed:
         detected_chalkboard, detected_corners = detect_chalkboard(frame)
         if detected_chalkboard:
@@ -300,21 +270,22 @@ while True:
             last_area = current_area
 
         # Orange circle detection
-        orange_x, orange_y, orange_radius = detect_orange_circle(chalkboard_roi)
-        if orange_x is not None and orange_y is not None:
-            if all(np.linalg.norm(np.array([orange_x, orange_y]) - np.array([ox, oy])) > ORANGE_THRESHOLD for ox, oy in ignored_oranges):
-                cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), orange_radius, (0, 165, 255), 2)
-                cv2.putText(frame, 'Orange', (orange_x - 10, orange_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
+        if chalkboard_roi is not None:
+            orange_x, orange_y, orange_radius = detect_orange_circle(chalkboard_roi)
+            if orange_x is not None and orange_y is not None:
+                if all(np.linalg.norm(np.array([orange_x, orange_y]) - np.array([ox, oy])) > ORANGE_THRESHOLD for ox, oy in ignored_oranges):
+                    cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), orange_radius, (0, 165, 255), 2)
+                    cv2.putText(frame, 'Orange', (orange_x - 10, orange_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
 
-                # Extract the region close to the orange circle
-                orange_roi = frame[y+orange_y-orange_radius-MARGIN:y+orange_y+orange_radius+MARGIN, x+orange_x-orange_radius-MARGIN:x+orange_x+orange_radius+MARGIN]
-                latex_text = analyze_image_with_question(orange_roi, "Please write what is written on this chalkboard in latex, just return the full text in latex within a JSON object of the form {'latex': 'your latex text'}")
-                print(f"Orange Latex Text detected: {latex_text}")
+                    # Extract the region close to the orange circle
+                    orange_roi = frame[y+orange_y-orange_radius-MARGIN:y+orange_y+orange_radius+MARGIN, x+orange_x-orange_radius-MARGIN:x+orange_x+orange_radius+MARGIN]
+                    latex_text = analyze_image_with_question(orange_roi, "Please write what is written on this chalkboard in latex, just return the full text in latex within a JSON object of the form {'latex': 'your latex text'}")
+                    print(f"Orange Latex Text detected: {latex_text}")
 
-                ignored_oranges.append((orange_x, orange_y))
+                    ignored_oranges.append((orange_x, orange_y))
 
-                if DEBUG_VIEW:
-                    cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), ORANGE_THRESHOLD, (0, 0, 255), 2)
+                    if DEBUG_VIEW:
+                        cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), ORANGE_THRESHOLD, (0, 0, 255), 2)
 
         if PERSON_DETECTION:
             person_box = detect_person(frame)
@@ -322,14 +293,61 @@ while True:
                 px, py, pw, ph = person_box
                 cv2.rectangle(frame, (px, py), (px + pw, py + ph), (0, 0, 255), 2)
                 cv2.putText(frame, 'Person', (px, py - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+    
+    return chalkboard_coords, chalkboard_corners, chalkboard_confirmed, start_time, last_detection_time, average_color, writing_boxes, last_writing_check, last_area, ignored_oranges
 
-    # Display the resulting frame
-    if DEBUG_VIEW:
-        cv2.imshow('Chalkboard and Writing Detection', frame)
+def main():
+    # Initialize the webcam or video feed
+    if DEBUG_FEED:
+        cap = cv2.VideoCapture(VIDEO_PATH)
+    else:
+        cap = cv2.VideoCapture(0)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    if not cap.isOpened():
+        print("Error: Could not open video source.")
+        return
 
-cap.release()
-cv2.destroyAllWindows()
+    chalkboard_coords = None
+    chalkboard_corners = None
+    chalkboard_confirmed = False
+    start_time = None
+    last_detection_time = None
+    average_color = None
+    writing_boxes = []
+    last_writing_check = 0
+    last_area = None
+    ignored_oranges = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            if DEBUG_FEED:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop the video
+                continue
+            else:
+                print("Failed to grab frame.")
+                break
+
+        # Only set chalkboard_roi if chalkboard is confirmed
+        if chalkboard_confirmed:
+            chalkboard_roi = frame[chalkboard_coords[1]:chalkboard_coords[1] + chalkboard_coords[3],
+                                   chalkboard_coords[0]:chalkboard_coords[0] + chalkboard_coords[2]]
+        else:
+            chalkboard_roi = None
+
+        chalkboard_coords, chalkboard_corners, chalkboard_confirmed, start_time, last_detection_time, average_color, writing_boxes, last_writing_check, last_area, ignored_oranges = process_frame(
+            frame, chalkboard_coords, chalkboard_corners, chalkboard_confirmed, start_time, last_detection_time, average_color, writing_boxes, last_writing_check, last_area, ignored_oranges, chalkboard_roi)
+
+        # Display the resulting frame
+        if DEBUG_VIEW:
+            cv2.imshow('Chalkboard and Writing Detection', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
 
