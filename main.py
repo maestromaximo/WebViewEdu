@@ -1,3 +1,4 @@
+import json
 import cv2
 import numpy as np
 import time
@@ -36,7 +37,8 @@ WRITING_CHECK_INTERVAL = 5  # Seconds interval to recheck for new writing
 TEXT_DETECTION_URL = "https://aleale2423-textdetector.hf.space/detect"
 MARGIN = 10  # Extra pixels for the aggregated bounding box
 AREA_CHANGE_THRESHOLD = 0.2  # Minimum percentage change in area to trigger LaTeX conversion (20%)
-DETAIL_LEVEL = "low" # low, high, auto are the options for detail level for gpt to process the image
+DETAIL_LEVEL = "low"  # Options for detail level: low, high, auto
+ORANGE_THRESHOLD = 50  # Pixels radius to ignore further orange circles
 
 # Initialize YOLOS model for person detection if enabled
 if PERSON_DETECTION:
@@ -173,11 +175,25 @@ def analyze_image_with_question(image, question):
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
     response.raise_for_status()
     l_dict = response.json()['choices'][0]['message']['content']
-
+    l_dict = json.loads(l_dict)
     if isinstance(l_dict, dict) and len(list(l_dict.values())) > 0:
         return list(l_dict.values())[0]
     else:
         return "no text detected"
+
+def detect_orange_circle(frame):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    lower_orange = np.array([5, 150, 150])
+    upper_orange = np.array([15, 255, 255])
+    mask = cv2.inRange(hsv, lower_orange, upper_orange)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area > 100:  # Threshold to avoid detecting small dots
+            ((x, y), radius) = cv2.minEnclosingCircle(contour)
+            if radius > 5:  # Minimum radius to consider it a circle
+                return int(x), int(y), int(radius)
+    return None, None, None
 
 # Initialize the webcam or video feed
 if DEBUG_FEED:
@@ -198,6 +214,7 @@ average_color = None
 writing_boxes = []
 last_writing_check = 0
 last_area = None
+ignored_oranges = []
 
 while True:
     ret, frame = cap.read()
@@ -281,6 +298,23 @@ while True:
                 latex_text = analyze_image_with_question(writing_roi, "Please write what is written on this chalkboard in latex, just return the full text in latex within a JSON object of the form {'latex': 'your latex text'}")
                 print(f"Latex Text detected: {latex_text}")
             last_area = current_area
+
+        # Orange circle detection
+        orange_x, orange_y, orange_radius = detect_orange_circle(chalkboard_roi)
+        if orange_x is not None and orange_y is not None:
+            if all(np.linalg.norm(np.array([orange_x, orange_y]) - np.array([ox, oy])) > ORANGE_THRESHOLD for ox, oy in ignored_oranges):
+                cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), orange_radius, (0, 165, 255), 2)
+                cv2.putText(frame, 'Orange', (orange_x - 10, orange_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
+
+                # Extract the region close to the orange circle
+                orange_roi = frame[y+orange_y-orange_radius-MARGIN:y+orange_y+orange_radius+MARGIN, x+orange_x-orange_radius-MARGIN:x+orange_x+orange_radius+MARGIN]
+                latex_text = analyze_image_with_question(orange_roi, "Please write what is written on this chalkboard in latex, just return the full text in latex within a JSON object of the form {'latex': 'your latex text'}")
+                print(f"Orange Latex Text detected: {latex_text}")
+
+                ignored_oranges.append((orange_x, orange_y))
+
+                if DEBUG_VIEW:
+                    cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), ORANGE_THRESHOLD, (0, 0, 255), 2)
 
         if PERSON_DETECTION:
             person_box = detect_person(frame)
