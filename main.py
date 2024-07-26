@@ -1,4 +1,5 @@
 import json
+import tempfile
 import cv2
 import numpy as np
 import time
@@ -11,6 +12,8 @@ from io import BytesIO
 import base64
 import openai
 from dotenv import load_dotenv
+from autogen import ConversableAgent, AssistantAgent
+from autogen.coding import LocalCommandLineCodeExecutor
 
 # Load environment variables
 load_dotenv()
@@ -29,7 +32,7 @@ VIDEO_PATH = 'C:/Users/aleja/OneDrive/Escritorio/WebViewEdu/test_vid1.mp4'  # Pa
 PERSON_DETECTION = False  # Hyperparameter to control person detection
 AREA_THRESHOLD = 1000
 DISTANCE_THRESHOLD = 1  # Adjusted based on the requirement
-STABILITY_THRESHOLD = 10  # Pixels threshold for movement
+STABILITY_THRESHOLD = 30  # Pixels threshold for movement
 CONFIRMATION_TIME = 10  # Seconds to confirm chalkboard stability
 REAPPEARANCE_TIME = 0.5  # Seconds to allow brief periods without detection
 CUSHION = 10  # Pixels to reduce the chalkboard's bounding box for average color calculation
@@ -39,6 +42,8 @@ MARGIN = 10  # Extra pixels for the aggregated bounding box
 AREA_CHANGE_THRESHOLD = 0.2  # Minimum percentage change in area to trigger LaTeX conversion (20%)
 DETAIL_LEVEL = "low"  # Options for detail level: low, high, auto
 ORANGE_THRESHOLD = 50  # Pixels radius to ignore further orange circles
+
+orange_count = 0
 
 # Initialize YOLOS model for person detection if enabled
 if PERSON_DETECTION:
@@ -195,7 +200,92 @@ def detect_orange_circle(frame):
                 return int(x), int(y), int(radius)
     return None, None, None
 
+def run_code_task(prompt):
+    # Load environment variables
+    load_dotenv()
+    
+    # Replace with your actual API key
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    # Directory to store code files
+    coding_dir = "coding"
+    if not os.path.exists(coding_dir):
+        os.makedirs(coding_dir)
+
+    # Clean the temporary directory
+    temp_dir = tempfile.TemporaryDirectory(dir=coding_dir)
+
+    # Create a local command line code executor
+    executor = LocalCommandLineCodeExecutor(
+        timeout=10,  # Timeout for each code execution in seconds.
+        work_dir=temp_dir.name,  # Use the temporary directory to store the code files.
+    )
+
+    # Create the code executor agent
+    code_executor_agent = ConversableAgent(
+        name="CodeExecutorAgent",
+        system_message="You execute code provided to you.",
+        llm_config=False,  # Turn off LLM for this agent.
+        code_execution_config={"executor": executor},  # Use the local command line code executor.
+        human_input_mode="NEVER",  # Always take human input for this agent for safety.
+    )
+
+    # Create the code writer agent
+    code_writer_agent = AssistantAgent(
+        name="CodeWriterAgent",
+        llm_config={"config_list": [{"model": "gpt-4", "api_key": api_key}]},
+        code_execution_config=False,  # Turn off code execution for this agent.
+    )
+
+    def execute_task(prompt):
+        # Clean the temporary directory at the beginning
+        for file in os.listdir(temp_dir.name):
+            file_path = os.path.join(temp_dir.name, file)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+
+        # Start the conversation with the initial prompt
+        chat_result = code_executor_agent.initiate_chat(
+            recipient=code_writer_agent,
+            message=f"Identify if this problem needs to be graphed, computed, or solved: {prompt}. "
+                    "If it needs to be graphed, write a Python script to graph it and save it as 'plot.png'. "
+                    "Do not display the plot. "
+                    "If it needs to be computed or solved, write a Python script to compute or solve it, and save the result in 'result.txt'. "
+                    "Terminate after performing the required action."
+                    "The problem may contain mathematical expressions, equations, or functions, and may contain information outside the problem, identify what is relevant and then proceed with the task.",
+            max_turns=5,  # Adjust the number of turns as needed
+            summary_method="last_msg"
+        )
+
+        # Print the conversation history
+        for message in chat_result.chat_history:
+            print(f"{message['role']}: {message['content']}")
+
+        # Check for plot.png or result.txt
+        result = None
+        if 'plot.png' in os.listdir(temp_dir.name):
+            result = os.path.join(temp_dir.name, 'plot.png')
+        elif 'result.txt' in os.listdir(temp_dir.name):
+            with open(os.path.join(temp_dir.name, 'result.txt'), 'r') as file:
+                result = file.read()
+        
+        # Clean up the temporary directory
+        for file in os.listdir(temp_dir.name):
+            file_path = os.path.join(temp_dir.name, file)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+
+        return result
+
+    result = execute_task(prompt)
+    return result
+
+def agent_math(prompt):
+    result = run_code_task(prompt)
+    return result
+
 def process_frame(frame, chalkboard_coords, chalkboard_corners, chalkboard_confirmed, start_time, last_detection_time, average_color, writing_boxes, last_writing_check, last_area, ignored_oranges, chalkboard_roi):
+    global orange_count
     if not chalkboard_confirmed:
         detected_chalkboard, detected_corners = detect_chalkboard(frame)
         if detected_chalkboard:
@@ -287,6 +377,19 @@ def process_frame(frame, chalkboard_coords, chalkboard_corners, chalkboard_confi
                     if DEBUG_VIEW:
                         cv2.circle(frame[y:y+h, x:x+w], (orange_x, orange_y), ORANGE_THRESHOLD, (0, 0, 255), 2)
 
+                    # Pass the detected LaTeX text to agent_math and handle the result
+                    if orange_count > 0:
+                        math_result = agent_math(latex_text)
+                        if isinstance(math_result, str):
+                            print(f"Math Result: {math_result}")
+                        elif os.path.isfile(math_result) and math_result.endswith('.png'):
+                            print("Displaying generated plot...")
+                            plot_image = cv2.imread(math_result)
+                            cv2.imshow('Generated Plot', plot_image)
+                    else:
+                        orange_count += 1
+                        print("Orange circle detected, ignoring")
+
         if PERSON_DETECTION:
             person_box = detect_person(frame)
             if person_box:
@@ -350,4 +453,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
