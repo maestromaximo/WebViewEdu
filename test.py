@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import pygame
 import os
 
 # Load environment variables
@@ -27,7 +28,7 @@ MARGIN = 10
 AREA_CHANGE_THRESHOLD = 0.2
 DETAIL_LEVEL = "low"
 ORANGE_THRESHOLD = 50
-DEBUG_BOARD = True  # Set this to True to simulate an average board
+DEBUG_BOARD = False  # Set this to True to simulate an average board
 orange_count = 0
 
 # Function to project purple circles at the corners
@@ -43,9 +44,24 @@ def project_purple_circles():
     for (x, y) in positions:
         cv2.circle(image, (x, y), radius, color, thickness)
 
-    # Project the image (for now, just save it to a file for debugging)
-    cv2.imwrite("projected_circles.png", image)
-    # Code to actually project the image using your projector setup would go here
+    # Convert the image to a format suitable for pygame
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = np.rot90(image)  # Rotate the image for correct orientation in pygame
+    image = pygame.surfarray.make_surface(image)
+
+    # Initialize pygame and display the image fullscreen
+    pygame.init()
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen.blit(image, (0, 0))
+    pygame.display.flip()
+
+    # Keep displaying the image until the user quits
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                running = False
+                pygame.quit()
 
 # Function to detect purple circles and calculate the transformation
 def detect_purple_circles_and_calculate_transform():
@@ -107,9 +123,24 @@ def apply_transform_and_project(transform_matrix):
     height, width = image.shape[:2]
     corrected_image = cv2.warpPerspective(image, transform_matrix, (width, height))
 
-    # Project the corrected image (for now, just save it to a file for debugging)
-    cv2.imwrite("corrected_image.png", corrected_image)
-    # Code to actually project the image using your projector setup would go here
+    # Convert the image to a format suitable for pygame
+    corrected_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB)
+    corrected_image = np.rot90(corrected_image)
+    corrected_image = pygame.surfarray.make_surface(corrected_image)
+
+    # Initialize pygame and display the image fullscreen
+    pygame.init()
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen.blit(corrected_image, (0, 0))
+    pygame.display.flip()
+
+    # Keep displaying the image until the user quits
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                running = False
+                pygame.quit()
 
 def main():
     if DEBUG_BOARD:

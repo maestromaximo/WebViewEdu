@@ -12,3 +12,4 @@ python-dotenv==1.0.1
 openai==1.35.14
 pyautogen==0.2.32
 matplotlib==3.9.1
+pygame==2.6.0
