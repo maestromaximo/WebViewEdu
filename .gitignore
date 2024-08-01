@@ -1,4 +1,5 @@
 /venv
 /autovenv
+/pyvenv
 .env
 test_vid1.mp4
