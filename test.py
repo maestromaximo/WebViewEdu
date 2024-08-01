@@ -98,19 +98,27 @@ def detect_circles_and_calculate_transform():
             cv2.imwrite(original_filename, frame)
             print(f"Saved original frame: {original_filename}")
 
-        # Convert image to grayscale and apply GaussianBlur
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (11, 11), 0)
-        print("Converted image to grayscale and applied GaussianBlur")
+        # Convert image to HSV and apply color mask for purple
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        lower_purple = np.array([120, 50, 50])
+        upper_purple = np.array([150, 255, 255])
+        mask = cv2.inRange(hsv, lower_purple, upper_purple)
+        
+        # Apply the mask to get a binary image
+        res = cv2.bitwise_and(frame, frame, mask=mask)
+        gray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
 
-        # Save the grayscale blurred frame
+        print("Applied color mask and converted to binary image")
+
+        # Save the binary frame
         if DEBUG_FOLDER_PHOTOS:
-            blurred_filename = os.path.join(DEBUG_FOLDER_PATH, f"blurred_frame_{image_counter}.png")
-            cv2.imwrite(blurred_filename, blurred)
-            print(f"Saved blurred frame: {blurred_filename}")
+            binary_filename = os.path.join(DEBUG_FOLDER_PATH, f"binary_frame_{image_counter}.png")
+            cv2.imwrite(binary_filename, binary)
+            print(f"Saved binary frame: {binary_filename}")
 
         # Detect circles using HoughCircles
-        circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
+        circles = cv2.HoughCircles(binary, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
 
         if circles is not None:
             circles = np.round(circles[0, :]).astype("int")
