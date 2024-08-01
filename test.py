@@ -100,10 +100,17 @@ def detect_circles_and_calculate_transform():
 
         # Convert image to HSV and apply color mask for purple
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_purple = np.array([120, 50, 50])
-        upper_purple = np.array([150, 255, 255])
+        lower_purple = np.array([110, 50, 50])
+        upper_purple = np.array([160, 255, 255])
         mask = cv2.inRange(hsv, lower_purple, upper_purple)
-        
+
+        # Debug print to capture HSV values in the range
+        if DEBUG_FOLDER_PHOTOS:
+            print(f"HSV values (lower): {lower_purple}, (upper): {upper_purple}")
+            for i in range(0, hsv.shape[0], hsv.shape[0]//10):
+                for j in range(0, hsv.shape[1], hsv.shape[1]//10):
+                    print(f"HSV at ({i}, {j}): {hsv[i, j]}")
+
         # Apply the mask to get a binary image
         res = cv2.bitwise_and(frame, frame, mask=mask)
         gray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
@@ -205,5 +212,5 @@ def main():
     else:
         print("Failed to calculate transformation matrix")
 
-if __name__ == "__main__":
+if __name__ == "main":
     main()
