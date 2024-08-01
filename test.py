@@ -98,50 +98,65 @@ def detect_circles_and_calculate_transform():
             cv2.imwrite(original_filename, frame)
             print(f"Saved original frame: {original_filename}")
 
-        # Convert image to HSV and apply color mask for purple
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_purple = np.array([110, 50, 50])
-        upper_purple = np.array([160, 255, 255])
-        mask = cv2.inRange(hsv, lower_purple, upper_purple)
+        # Initialize the HSV range
+        lower_h, upper_h = 120, 150
+        lower_s, upper_s = 50, 255
+        lower_v, upper_v = 50, 255
+        step = 10
 
-        # Debug print to capture HSV values in the range
-        if DEBUG_FOLDER_PHOTOS:
-            print(f"HSV values (lower): {lower_purple}, (upper): {upper_purple}")
-            for i in range(0, hsv.shape[0], hsv.shape[0]//10):
-                for j in range(0, hsv.shape[1], hsv.shape[1]//10):
-                    print(f"HSV at ({i}, {j}): {hsv[i, j]}")
+        while True:
+            # Convert image to HSV and apply color mask for purple
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            lower_purple = np.array([lower_h, lower_s, lower_v])
+            upper_purple = np.array([upper_h, upper_s, upper_v])
+            mask = cv2.inRange(hsv, lower_purple, upper_purple)
 
-        # Apply the mask to get a binary image
-        res = cv2.bitwise_and(frame, frame, mask=mask)
-        gray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+            # Apply the mask to get a binary image
+            res = cv2.bitwise_and(frame, frame, mask=mask)
+            gray = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
+            _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
 
-        print("Applied color mask and converted to binary image")
+            print("Applied color mask and converted to binary image")
 
-        # Save the binary frame
-        if DEBUG_FOLDER_PHOTOS:
-            binary_filename = os.path.join(DEBUG_FOLDER_PATH, f"binary_frame_{image_counter}.png")
-            cv2.imwrite(binary_filename, binary)
-            print(f"Saved binary frame: {binary_filename}")
+            # Save the binary frame
+            if DEBUG_FOLDER_PHOTOS:
+                binary_filename = os.path.join(DEBUG_FOLDER_PATH, f"binary_frame_{image_counter}.png")
+                cv2.imwrite(binary_filename, binary)
+                print(f"Saved binary frame: {binary_filename}")
 
-        # Detect circles using HoughCircles
-        circles = cv2.HoughCircles(binary, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
+            # Detect circles using HoughCircles
+            circles = cv2.HoughCircles(binary, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
 
-        if circles is not None:
-            circles = np.round(circles[0, :]).astype("int")
-            detected_positions = [(x, y) for (x, y, r) in circles]
-            print(f"Detected circles at positions: {detected_positions}")
+            if circles is not None:
+                circles = np.round(circles[0, :]).astype("int")
+                detected_positions = [(x, y) for (x, y, r) in circles]
+                print(f"Detected circles at positions: {detected_positions}")
 
-            # Draw green dots at the center of detected circles
-            for (x, y) in detected_positions:
-                cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                # Check if four circles are detected
+                if len(detected_positions) == 4:
+                    # Draw green dots at the center of detected circles
+                    for (x, y) in detected_positions:
+                        cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                    break
 
-        # Save the processed frame with detected circles
-        if DEBUG_FOLDER_PHOTOS:
-            processed_filename = os.path.join(DEBUG_FOLDER_PATH, f"processed_frame_{image_counter}.png")
-            cv2.imwrite(processed_filename, frame)
-            print(f"Saved processed frame: {processed_filename}")
-            image_counter += 1
+            print("No circles detected or insufficient number of circles, expanding HSV range")
+
+            # Expand the HSV range
+            lower_h = max(0, lower_h - step)
+            upper_h = min(180, upper_h + step)
+            lower_s = max(0, lower_s - step)
+            upper_s = min(255, upper_s + step)
+            lower_v = max(0, lower_v - step)
+            upper_v = min(255, upper_v + step)
+
+            # Save the processed frame with detected circles
+            if DEBUG_FOLDER_PHOTOS:
+                processed_filename = os.path.join(DEBUG_FOLDER_PATH, f"processed_frame_{image_counter}.png")
+                cv2.imwrite(processed_filename, frame)
+                print(f"Saved processed frame: {processed_filename}")
+                image_counter += 1
+
+            time.sleep(0.5)
 
         # Expected positions of the circles (adjusted inward)
         height, width = frame.shape[:2]
@@ -149,7 +164,7 @@ def detect_circles_and_calculate_transform():
         expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
 
         # Calculate transformation
-        if circles is not None and len(detected_positions) == 4:
+        if len(detected_positions) == 4:
             src_pts = np.array(detected_positions, dtype=np.float32)
             dst_pts = np.array(expected_positions, dtype=np.float32)
             transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
@@ -212,5 +227,5 @@ def main():
     else:
         print("Failed to calculate transformation matrix")
 
-if __name__ == "main":
+if __name__ == "__main__":
     main()
