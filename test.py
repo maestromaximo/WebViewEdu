@@ -73,6 +73,13 @@ def project_circles():
 # Function to detect circles and calculate the transformation
 def detect_circles_and_calculate_transform():
     image_counter = 0
+
+    # Clear the debug folder if it exists
+    if DEBUG_FOLDER_PHOTOS:
+        if os.path.exists(DEBUG_FOLDER_PATH):
+            shutil.rmtree(DEBUG_FOLDER_PATH)
+        os.makedirs(DEBUG_FOLDER_PATH)
+
     while True:
         # Capture image from webcam
         cap = cv2.VideoCapture(0)
@@ -85,10 +92,22 @@ def detect_circles_and_calculate_transform():
 
         print("Captured image from webcam")
 
+        # Save the original captured frame
+        if DEBUG_FOLDER_PHOTOS:
+            original_filename = os.path.join(DEBUG_FOLDER_PATH, f"original_frame_{image_counter}.png")
+            cv2.imwrite(original_filename, frame)
+            print(f"Saved original frame: {original_filename}")
+
         # Convert image to grayscale and apply GaussianBlur
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (11, 11), 0)
         print("Converted image to grayscale and applied GaussianBlur")
+
+        # Save the grayscale blurred frame
+        if DEBUG_FOLDER_PHOTOS:
+            blurred_filename = os.path.join(DEBUG_FOLDER_PATH, f"blurred_frame_{image_counter}.png")
+            cv2.imwrite(blurred_filename, blurred)
+            print(f"Saved blurred frame: {blurred_filename}")
 
         # Detect circles using HoughCircles
         circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
@@ -102,35 +121,27 @@ def detect_circles_and_calculate_transform():
             for (x, y) in detected_positions:
                 cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
 
-            # Save the processed image if DEBUG_FOLDER_PHOTOS is True
-            if DEBUG_FOLDER_PHOTOS:
-                if not os.path.exists(DEBUG_FOLDER_PATH):
-                    os.makedirs(DEBUG_FOLDER_PATH)
-                else:
-                    for filename in os.listdir(DEBUG_FOLDER_PATH):
-                        file_path = os.path.join(DEBUG_FOLDER_PATH, filename)
-                        os.remove(file_path)
-                debug_filename = os.path.join(DEBUG_FOLDER_PATH, f"debug_frame_{image_counter}.png")
-                cv2.imwrite(debug_filename, frame)
-                print(f"Saved debug frame: {debug_filename}")
-                image_counter += 1
+        # Save the processed frame with detected circles
+        if DEBUG_FOLDER_PHOTOS:
+            processed_filename = os.path.join(DEBUG_FOLDER_PATH, f"processed_frame_{image_counter}.png")
+            cv2.imwrite(processed_filename, frame)
+            print(f"Saved processed frame: {processed_filename}")
+            image_counter += 1
 
-            # Expected positions of the circles (adjusted inward)
-            height, width = frame.shape[:2]
-            offset = 100
-            expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
+        # Expected positions of the circles (adjusted inward)
+        height, width = frame.shape[:2]
+        offset = 100
+        expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
 
-            # Calculate transformation
-            if len(detected_positions) == 4:
-                src_pts = np.array(detected_positions, dtype=np.float32)
-                dst_pts = np.array(expected_positions, dtype=np.float32)
-                transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
-                print("Calculated transformation matrix")
-                return transform_matrix
-            else:
-                print(f"Expected 4 circles but detected {len(detected_positions)}, retrying...")
+        # Calculate transformation
+        if circles is not None and len(detected_positions) == 4:
+            src_pts = np.array(detected_positions, dtype=np.float32)
+            dst_pts = np.array(expected_positions, dtype=np.float32)
+            transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
+            print("Calculated transformation matrix")
+            return transform_matrix
         else:
-            print("No circles detected, retrying...")
+            print("No circles detected or insufficient number of circles, retrying...")
 
         time.sleep(1)
 
