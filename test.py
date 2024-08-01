@@ -18,7 +18,7 @@ ASPECT_RATIO_MAX = 2.5
 DEBUG_VIEW = False
 DEBUG_FEED = True
 VIDEO_PATH = 'C:/Users/aleja/OneDrive/Escritorio/WebViewEdu/test_vid1.mp4'
-AREA_THRESHOLD = 1000
+AREA_THRESHOLD = 10
 DISTANCE_THRESHOLD = 1
 STABILITY_THRESHOLD = 30
 CONFIRMATION_TIME = 10
@@ -30,7 +30,7 @@ MARGIN = 10
 AREA_CHANGE_THRESHOLD = 0.2
 DETAIL_LEVEL = "low"
 ORANGE_THRESHOLD = 50
-DEBUG_BOARD = False  # Set this to True to simulate an average board
+DEBUG_BOARD = True  # Set this to True to simulate an average board
 DEBUG_FOLDER_PHOTOS = True  # Set this to True to save processed images with detected circles
 DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will be saved
 
