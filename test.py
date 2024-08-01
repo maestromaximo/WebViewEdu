@@ -32,8 +32,8 @@ ORANGE_THRESHOLD = 50
 DEBUG_BOARD = False  # Set this to True to simulate an average board
 orange_count = 0
 
-# Function to project purple circles at the corners
-def project_purple_circles():
+# Function to project circles at the corners
+def project_circles():
     height, width = 1080, 1920  # Assume 1080p resolution for the projector
     image = np.zeros((height, width, 3), np.uint8)
     color = (255, 0, 255)  # Purple color in BGR
@@ -66,8 +66,8 @@ def project_purple_circles():
                 pygame.quit()
                 return
 
-# Function to detect purple circles and calculate the transformation
-def detect_purple_circles_and_calculate_transform():
+# Function to detect circles and calculate the transformation
+def detect_circles_and_calculate_transform():
     while True:
         # Capture image from webcam
         cap = cv2.VideoCapture(0)
@@ -78,41 +78,39 @@ def detect_purple_circles_and_calculate_transform():
             print("Failed to capture image from webcam")
             continue
 
-        # Convert image to HSV
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_purple = np.array([130, 50, 50])
-        upper_purple = np.array([160, 255, 255])
-        mask = cv2.inRange(hsv, lower_purple, upper_purple)
+        print("Captured image from webcam")
 
-        # Apply morphological operations to clean up the mask
-        kernel = np.ones((5, 5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        # Convert image to grayscale and apply GaussianBlur
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+        print("Converted image to grayscale and applied GaussianBlur")
 
-        # Find contours
-        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        detected_positions = []
-        for contour in contours:
-            if cv2.contourArea(contour) > 500:  # Minimum area to filter noise
-                M = cv2.moments(contour)
-                if M["m00"] != 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
-                    detected_positions.append((cx, cy))
+        # Detect circles using HoughCircles
+        circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
 
-        # Expected positions of the circles (adjusted inward)
-        height, width = frame.shape[:2]
-        offset = 100
-        expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
+        if circles is not None:
+            circles = np.round(circles[0, :]).astype("int")
+            detected_positions = [(x, y) for (x, y, r) in circles]
+            print(f"Detected circles at positions: {detected_positions}")
 
-        # Calculate transformation
-        if len(detected_positions) == 4:
-            src_pts = np.array(detected_positions, dtype=np.float32)
-            dst_pts = np.array(expected_positions, dtype=np.float32)
-            transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
-            return transform_matrix
+            # Expected positions of the circles (adjusted inward)
+            height, width = frame.shape[:2]
+            offset = 100
+            expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
+
+            # Calculate transformation
+            if len(detected_positions) == 4:
+                src_pts = np.array(detected_positions, dtype=np.float32)
+                dst_pts = np.array(expected_positions, dtype=np.float32)
+                transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
+                print("Calculated transformation matrix")
+                return transform_matrix
+            else:
+                print(f"Expected 4 circles but detected {len(detected_positions)}, retrying...")
         else:
-            print("Failed to detect all circles, retrying...")
-            time.sleep(1)
+            print("No circles detected, retrying...")
+
+        time.sleep(1)
 
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
@@ -153,14 +151,14 @@ def main():
         print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
     # Create a thread for projecting the circles
-    projection_thread = threading.Thread(target=project_purple_circles)
+    projection_thread = threading.Thread(target=project_circles)
     projection_thread.start()
 
     # Wait a bit to ensure the projector is displaying the image
-    time.sleep(1)
+    time.sleep(2)
 
     # Run the detection and adjustment in the main thread
-    transform_matrix = detect_purple_circles_and_calculate_transform()
+    transform_matrix = detect_circles_and_calculate_transform()
     if transform_matrix is not None:
         apply_transform_and_project(transform_matrix)
     else:
