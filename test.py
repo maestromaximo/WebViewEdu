@@ -3,6 +3,7 @@ import numpy as np
 import time
 import pygame
 import os
+import shutil
 import threading
 
 # Load environment variables
@@ -30,6 +31,9 @@ AREA_CHANGE_THRESHOLD = 0.2
 DETAIL_LEVEL = "low"
 ORANGE_THRESHOLD = 50
 DEBUG_BOARD = False  # Set this to True to simulate an average board
+DEBUG_FOLDER_PHOTOS = True  # Set this to True to save processed images with detected circles
+DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will be saved
+
 orange_count = 0
 
 # Function to project circles at the corners
@@ -68,6 +72,7 @@ def project_circles():
 
 # Function to detect circles and calculate the transformation
 def detect_circles_and_calculate_transform():
+    image_counter = 0
     while True:
         # Capture image from webcam
         cap = cv2.VideoCapture(0)
@@ -92,6 +97,23 @@ def detect_circles_and_calculate_transform():
             circles = np.round(circles[0, :]).astype("int")
             detected_positions = [(x, y) for (x, y, r) in circles]
             print(f"Detected circles at positions: {detected_positions}")
+
+            # Draw green dots at the center of detected circles
+            for (x, y) in detected_positions:
+                cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+
+            # Save the processed image if DEBUG_FOLDER_PHOTOS is True
+            if DEBUG_FOLDER_PHOTOS:
+                if not os.path.exists(DEBUG_FOLDER_PATH):
+                    os.makedirs(DEBUG_FOLDER_PATH)
+                else:
+                    for filename in os.listdir(DEBUG_FOLDER_PATH):
+                        file_path = os.path.join(DEBUG_FOLDER_PATH, filename)
+                        os.remove(file_path)
+                debug_filename = os.path.join(DEBUG_FOLDER_PATH, f"debug_frame_{image_counter}.png")
+                cv2.imwrite(debug_filename, frame)
+                print(f"Saved debug frame: {debug_filename}")
+                image_counter += 1
 
             # Expected positions of the circles (adjusted inward)
             height, width = frame.shape[:2]
