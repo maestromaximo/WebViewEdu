@@ -3,6 +3,7 @@ import numpy as np
 import time
 import pygame
 import os
+import threading
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -62,6 +63,7 @@ def project_purple_circles():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
                 pygame.quit()
+                return
 
 # Function to detect purple circles and calculate the transformation
 def detect_purple_circles_and_calculate_transform():
@@ -149,8 +151,14 @@ def main():
         board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
         print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
-    project_purple_circles()
-    time.sleep(1)  # Wait for the projector to display the image
+    # Create a thread for projecting the circles
+    projection_thread = threading.Thread(target=project_purple_circles)
+    projection_thread.start()
+
+    # Wait a bit to ensure the projector is displaying the image
+    time.sleep(1)
+
+    # Run the detection and adjustment in the main thread
     transform_matrix = detect_purple_circles_and_calculate_transform()
     if transform_matrix is not None:
         apply_transform_and_project(transform_matrix)
