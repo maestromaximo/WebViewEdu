@@ -124,20 +124,23 @@ def detect_circles_and_calculate_transform():
                 cv2.imwrite(binary_filename, binary)
                 print(f"Saved binary frame: {binary_filename}")
 
-            # Detect circles using HoughCircles
-            circles = cv2.HoughCircles(binary, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=30, minRadius=30, maxRadius=70)
+            # Find contours in the binary image
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            detected_positions = []
+            for contour in contours:
+                if cv2.contourArea(contour) > AREA_THRESHOLD:
+                    M = cv2.moments(contour)
+                    if M["m00"] != 0:
+                        cX = int(M["m10"] / M["m00"])
+                        cY = int(M["m01"] / M["m00"])
+                        detected_positions.append((cX, cY))
 
-            if circles is not None:
-                circles = np.round(circles[0, :]).astype("int")
-                detected_positions = [(x, y) for (x, y, r) in circles]
-                print(f"Detected circles at positions: {detected_positions}")
-
-                # Check if four circles are detected
-                if len(detected_positions) == 4:
-                    # Draw green dots at the center of detected circles
-                    for (x, y) in detected_positions:
-                        cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
-                    break
+            if len(detected_positions) == 4:
+                print(f"Detected 4 positions: {detected_positions}")
+                # Draw green dots at the center of detected positions
+                for (x, y) in detected_positions:
+                    cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                break
 
             print("No circles detected or insufficient number of circles, expanding HSV range")
 
