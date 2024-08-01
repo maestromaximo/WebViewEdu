@@ -37,11 +37,12 @@ def project_purple_circles():
     height, width = 1080, 1920  # Assume 1080p resolution for the projector
     image = np.zeros((height, width, 3), np.uint8)
     color = (255, 0, 255)  # Purple color in BGR
-    radius = 30
+    radius = 50  # Slightly larger radius for better visibility
     thickness = -1  # Filled circles
 
-    # Positions of the circles
-    positions = [(radius, radius), (width - radius, radius), (radius, height - radius), (width - radius, height - radius)]
+    # Adjusted positions of the circles (moved inward from the corners)
+    offset = 100
+    positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
     for (x, y) in positions:
         cv2.circle(image, (x, y), radius, color, thickness)
 
@@ -98,10 +99,10 @@ def detect_purple_circles_and_calculate_transform():
                     cy = int(M["m01"] / M["m00"])
                     detected_positions.append((cx, cy))
 
-        # Expected positions of the circles
+        # Expected positions of the circles (adjusted inward)
         height, width = frame.shape[:2]
-        radius = 30
-        expected_positions = [(radius, radius), (width - radius, radius), (radius, height - radius), (width - radius, height - radius)]
+        offset = 100
+        expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
 
         # Calculate transformation
         if len(detected_positions) == 4:
