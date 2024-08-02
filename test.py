@@ -36,6 +36,16 @@ DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will
 
 orange_count = 0
 
+def order_points(pts):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
+
 # Function to project circles at the corners
 def project_circles(positions):
     height, width = 1080, 1920  # Assume 1080p resolution for the projector
@@ -156,6 +166,10 @@ def detect_circles_and_calculate_transform(screen, positions):
         offset = 100
         expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
 
+        # Order points to ensure consistency
+        detected_positions = order_points(np.array(detected_positions, dtype=np.float32))
+        expected_positions = order_points(np.array(expected_positions, dtype=np.float32))
+
         # Calculate transformation
         if len(detected_positions) == 4:
             src_pts = np.array(detected_positions, dtype=np.float32)
@@ -192,15 +206,23 @@ def move_circles_to_corners(screen, initial_positions, target_positions):
 
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
-    # Load an example image to project
     image = cv2.imread("example_image.png")
     if image is None:
         print("Failed to load image")
         return
 
-    # Apply the transformation
     height, width = image.shape[:2]
+    print("Original image dimensions:", width, height)
+    print("Transform Matrix:")
+    print(transform_matrix)
+
+    # Apply the transformation and save the debug output
     corrected_image = cv2.warpPerspective(image, transform_matrix, (width, height))
+    cv2.imwrite("corrected_image_original.png", corrected_image)
+
+    inverted_matrix = np.linalg.inv(transform_matrix)
+    corrected_image_inv = cv2.warpPerspective(image, inverted_matrix, (width, height))
+    cv2.imwrite("corrected_image_inverted.png", corrected_image_inv)
 
     # Convert the image to a format suitable for pygame
     corrected_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB)
