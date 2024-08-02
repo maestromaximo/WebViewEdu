@@ -46,6 +46,20 @@ def order_points(pts):
     rect[3] = pts[np.argmax(diff)]
     return rect
 
+def normalize_points(points):
+    min_x = min(p[0] for p in points)
+    max_x = max(p[0] for p in points)
+    min_y = min(p[1] for p in points)
+    max_y = max(p[1] for p in points)
+
+    normalized = []
+    for x, y in points:
+        nx = (x - min_x) / (max_x - min_x)
+        ny = (y - min_y) / (max_y - min_y)
+        normalized.append((nx, ny))
+
+    return np.array(normalized, dtype=np.float32)
+
 # Function to project circles at the corners
 def project_circles(positions):
     height, width = 1080, 1920  # Assume 1080p resolution for the projector
@@ -170,12 +184,26 @@ def detect_circles_and_calculate_transform(screen, positions):
         detected_positions = order_points(np.array(detected_positions, dtype=np.float32))
         expected_positions = order_points(np.array(expected_positions, dtype=np.float32))
 
+        # Normalize points
+        src_pts = normalize_points(detected_positions)
+        dst_pts = normalize_points(expected_positions)
+
         # Calculate transformation
         if len(detected_positions) == 4:
-            src_pts = np.array(detected_positions, dtype=np.float32)
-            dst_pts = np.array(expected_positions, dtype=np.float32)
             transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
-            print("Calculated transformation matrix")
+            print("Transformation matrix:")
+            np.set_printoptions(precision=10, suppress=True)
+            print(transform_matrix)
+
+            # Scale the transformation matrix
+            scale_matrix = np.array([
+                [width, 0, 0],
+                [0, height, 0],
+                [0, 0, 1]
+            ], dtype=np.float32)
+            transform_matrix = np.dot(scale_matrix, transform_matrix)
+            print("Scaled transformation matrix:")
+            print(transform_matrix)
 
             # Verify the transformation
             projected_pts = cv2.perspectiveTransform(np.array([src_pts]), transform_matrix)
@@ -221,24 +249,33 @@ def apply_transform_and_project(transform_matrix):
     print("Transform Matrix:")
     print(transform_matrix)
 
-    # Apply the transformation and save the debug output
-    corrected_image = cv2.warpPerspective(image, transform_matrix, (width, height))
-    cv2.imwrite("corrected_image_original.png", corrected_image)
+    # Apply the transformation to the screen coordinates
+    corners = np.array([
+        [0, 0],
+        [width, 0],
+        [width, height],
+        [0, height]
+    ], dtype=np.float32).reshape(-1, 1, 2)
+    transformed_corners = cv2.perspectiveTransform(corners, transform_matrix)
 
-    # Inverted transformation for verification
-    inverted_matrix = np.linalg.inv(transform_matrix)
-    corrected_image_inv = cv2.warpPerspective(image, inverted_matrix, (width, height))
-    cv2.imwrite("corrected_image_inverted.png", corrected_image_inv)
+    print("Transformed corners:")
+    print(transformed_corners)
+
+    # Create a blank screen to display the transformed image
+    blank_image = np.zeros((height, width, 3), np.uint8)
+
+    # Warp the perspective based on the transformed corners
+    warped_image = cv2.warpPerspective(image, transform_matrix, (width, height))
 
     # Convert the image to a format suitable for pygame
-    corrected_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB)
-    corrected_image = np.rot90(corrected_image)
-    corrected_image = pygame.surfarray.make_surface(corrected_image)
+    warped_image = cv2.cvtColor(warped_image, cv2.COLOR_BGR2RGB)
+    warped_image = np.rot90(warped_image)
+    warped_image = pygame.surfarray.make_surface(warped_image)
 
     # Initialize pygame and display the image fullscreen
     pygame.init()
-    screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)
-    screen.blit(corrected_image, (200, 200))
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen.blit(warped_image, (0, 0))
     pygame.display.flip()
 
     # Keep displaying the image until the user quits
