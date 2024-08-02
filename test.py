@@ -237,8 +237,8 @@ def apply_transform_and_project(transform_matrix):
 
     # Initialize pygame and display the image fullscreen
     pygame.init()
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    screen.blit(corrected_image, (0, 0))
+    screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)
+    screen.blit(corrected_image, (200, 200))
     pygame.display.flip()
 
     # Keep displaying the image until the user quits
