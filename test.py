@@ -37,16 +37,13 @@ DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will
 orange_count = 0
 
 # Function to project circles at the corners
-def project_circles():
+def project_circles(positions):
     height, width = 1080, 1920  # Assume 1080p resolution for the projector
     image = np.zeros((height, width, 3), np.uint8)
     color = (255, 0, 255)  # Purple color in BGR
     radius = 50  # Slightly larger radius for better visibility
     thickness = -1  # Filled circles
 
-    # Adjusted positions of the circles (moved inward from the corners)
-    offset = 100
-    positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
     for (x, y) in positions:
         cv2.circle(image, (x, y), radius, color, thickness)
 
@@ -61,17 +58,10 @@ def project_circles():
     screen.blit(image, (0, 0))
     pygame.display.flip()
 
-    # Keep displaying the image until the user quits
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                running = False
-                pygame.quit()
-                return
+    return screen
 
 # Function to detect circles and calculate the transformation
-def detect_circles_and_calculate_transform():
+def detect_circles_and_calculate_transform(screen, positions):
     image_counter = 0
 
     # Clear the debug folder if it exists
@@ -178,6 +168,28 @@ def detect_circles_and_calculate_transform():
 
         time.sleep(1)
 
+# Function to move circles to align with the board corners
+def move_circles_to_corners(screen, initial_positions, target_positions):
+    # Calculate the differences between initial positions and target positions
+    deltas = [(tx - ix, ty - iy) for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)]
+
+    while True:
+        for i in range(len(initial_positions)):
+            initial_positions[i] = (
+                initial_positions[i][0] + deltas[i][0] // 10,
+                initial_positions[i][1] + deltas[i][1] // 10
+            )
+
+        screen = project_circles(initial_positions)
+        pygame.display.flip()
+
+        if all(abs(tx - ix) < 10 and abs(ty - iy) < 10 for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)):
+            break
+
+        time.sleep(0.5)
+
+    return initial_positions
+
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
     # Load an example image to project
@@ -216,15 +228,23 @@ def main():
         board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
         print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
-    # Create a thread for projecting the circles
-    projection_thread = threading.Thread(target=project_circles)
-    projection_thread.start()
+    # Initial positions of the circles (slightly inward from the corners)
+    initial_positions = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
+
+    # Expected positions of the circles (board corners)
+    target_positions = [(200, 200), (1720, 200), (200, 880), (1720, 880)]
+
+    # Project initial circles
+    screen = project_circles(initial_positions)
 
     # Wait a bit to ensure the projector is displaying the image
     time.sleep(2)
 
+    # Move circles to align with the board corners
+    final_positions = move_circles_to_corners(screen, initial_positions, target_positions)
+
     # Run the detection and adjustment in the main thread
-    transform_matrix = detect_circles_and_calculate_transform()
+    transform_matrix = detect_circles_and_calculate_transform(screen, final_positions)
     if transform_matrix is not None:
         apply_transform_and_project(transform_matrix)
     else:
