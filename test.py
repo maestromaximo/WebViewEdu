@@ -176,6 +176,11 @@ def detect_circles_and_calculate_transform(screen, positions):
             dst_pts = np.array(expected_positions, dtype=np.float32)
             transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
             print("Calculated transformation matrix")
+
+            # Verify the transformation
+            projected_pts = cv2.perspectiveTransform(np.array([src_pts]), transform_matrix)
+            print(f"Projected points: {projected_pts}")
+
             return transform_matrix
         else:
             print("No circles detected or insufficient number of circles, retrying...")
@@ -220,6 +225,7 @@ def apply_transform_and_project(transform_matrix):
     corrected_image = cv2.warpPerspective(image, transform_matrix, (width, height))
     cv2.imwrite("corrected_image_original.png", corrected_image)
 
+    # Inverted transformation for verification
     inverted_matrix = np.linalg.inv(transform_matrix)
     corrected_image_inv = cv2.warpPerspective(image, inverted_matrix, (width, height))
     cv2.imwrite("corrected_image_inverted.png", corrected_image_inv)
