@@ -4,6 +4,7 @@ import time
 import pygame
 import os
 import shutil
+import threading
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -12,12 +13,28 @@ HF_TOKEN = os.getenv('HF_TOKEN')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Hyperparameters
+ASPECT_RATIO_MIN = 1.5
+ASPECT_RATIO_MAX = 2.5
 DEBUG_VIEW = False
 DEBUG_FEED = True
 VIDEO_PATH = 'C:/Users/aleja/OneDrive/Escritorio/WebViewEdu/test_vid1.mp4'
 AREA_THRESHOLD = 10
-DEBUG_FOLDER_PHOTOS = True
-DEBUG_FOLDER_PATH = 'debug_photos'
+DISTANCE_THRESHOLD = 1
+STABILITY_THRESHOLD = 30
+CONFIRMATION_TIME = 10
+REAPPEARANCE_TIME = 0.5
+CUSHION = 10
+WRITING_CHECK_INTERVAL = 5
+TEXT_DETECTION_URL = "https://aleale2423-textdetector.hf.space/detect"
+MARGIN = 10
+AREA_CHANGE_THRESHOLD = 0.2
+DETAIL_LEVEL = "low"
+ORANGE_THRESHOLD = 50
+DEBUG_BOARD = True  # Set this to True to simulate an average board
+DEBUG_FOLDER_PHOTOS = True  # Set this to True to save processed images with detected circles
+DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will be saved
+
+orange_count = 0
 
 def order_points(pts):
     rect = np.zeros((4, 2), dtype="float32")
@@ -198,6 +215,28 @@ def detect_circles_and_calculate_transform(screen, positions):
 
         time.sleep(1)
 
+# Function to move circles to align with the board corners
+def move_circles_to_corners(screen, initial_positions, target_positions):
+    # Calculate the differences between initial positions and target positions
+    deltas = [(tx - ix, ty - iy) for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)]
+
+    while True:
+        for i in range(len(initial_positions)):
+            initial_positions[i] = (
+                initial_positions[i][0] + deltas[i][0] // 10,
+                initial_positions[i][1] + deltas[i][1] // 10
+            )
+
+        screen = project_circles(initial_positions)
+        pygame.display.flip()
+
+        if all(abs(tx - ix) < 10 and abs(ty - iy) < 10 for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)):
+            break
+
+        time.sleep(0.5)
+
+    return initial_positions
+
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
     image = cv2.imread("example_image.png")
@@ -248,16 +287,17 @@ def apply_transform_and_project(transform_matrix):
                 pygame.quit()
 
 def main():
-    # Simulate an average board in the middle of the screen
-    height, width = 1080, 1920  # Assume 1080p resolution for the projector
-    board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
-    print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
+    if DEBUG_BOARD:
+        # Simulate an average board in the middle of the screen
+        height, width = 1080, 1920  # Assume 1080p resolution for the projector
+        board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
+        print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
     # Initial positions of the circles (slightly inward from the corners)
     initial_positions = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
 
     # Expected positions of the circles (board corners)
-    target_positions = [(board_x, board_y), (board_x + board_w, board_y), (board_x, board_y + board_h), (board_x + board_w, board_y + board_h)]
+    target_positions = [(200, 200), (1720, 200), (200, 880), (1720, 880)]
 
     # Project initial circles
     screen = project_circles(initial_positions)
@@ -265,8 +305,11 @@ def main():
     # Wait a bit to ensure the projector is displaying the image
     time.sleep(2)
 
+    # Move circles to align with the board corners
+    final_positions = move_circles_to_corners(screen, initial_positions, target_positions)
+
     # Run the detection and adjustment in the main thread
-    transform_matrix = detect_circles_and_calculate_transform(screen, initial_positions)
+    transform_matrix = detect_circles_and_calculate_transform(screen, final_positions)
     if transform_matrix is not None:
         apply_transform_and_project(transform_matrix)
     else:
