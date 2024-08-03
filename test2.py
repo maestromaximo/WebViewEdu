@@ -282,7 +282,27 @@ def main():
         transform_func = generate_transformation_function(proj_points, cam_points)
 
         # Apply transformation and project the image
-        cam_corners = [(912, 513), (1008, 513), (912, 567), (1008, 567)]  # Example corners in webcam coordinates  [(200, 200), (1720, 200), (200, 880), (1720, 880)]
+        cam_corners = [(200, 200), (1720, 200), (200, 880), (1720, 880)]  # Example corners in webcam coordinates
+
+        # Capture image from webcam for debugging
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        cap.release()
+        
+        if ret:
+            # Place green dots on detected positions
+            for (x, y) in detected_positions:
+                cv2.circle(frame, (x, y), 10, (0, 255, 0), -1)  # Green dots
+
+            # Place orange dots on cam corners
+            for (x, y) in cam_corners:
+                cv2.circle(frame, (x, y), 10, (0, 165, 255), -1)  # Orange dots
+
+            # Save the debug image
+            debug_filename = 'draw_debug.png'
+            cv2.imwrite(debug_filename, frame)
+            print(f"Saved debug image: {debug_filename}")
+
         apply_transform_and_project("example_image.png", transform_func, cam_corners)
     else:
         print("Failed to calculate transformation matrix")
