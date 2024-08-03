@@ -191,7 +191,7 @@ def detect_circles_and_calculate_transform(min_distance=50):
                 print(f"Detected 4 positions: {filtered_positions}")
                 # Draw green dots at the center of detected positions
                 for (x, y) in filtered_positions:
-                    cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                    cv2.circle(frame, (int(x), int(y)), 5, (0, 255, 0), -1)
                 break
 
             print("No circles detected or insufficient number of circles, expanding HSV range")
