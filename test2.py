@@ -277,7 +277,7 @@ def main():
     detected_positions = detect_circles_and_calculate_transform()
     if len(detected_positions) == 4:
         # Generate the transformation function
-        cam_points = [(x, y) for x, y in detected_positions]
+        cam_points = [(int(x), int(y)) for x, y in detected_positions]
         proj_points = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
         transform_func = generate_transformation_function(proj_points, cam_points)
 
@@ -291,12 +291,12 @@ def main():
         
         if ret:
             # Place green dots on detected positions
-            for (x, y) in detected_positions:
-                cv2.circle(frame, (x, y), 10, (0, 255, 0), -1)  # Green dots
+            for (x, y) in cam_points:
+                cv2.circle(frame, (int(x), int(y)), 10, (0, 255, 0), -1)  # Green dots
 
             # Place orange dots on cam corners
             for (x, y) in cam_corners:
-                cv2.circle(frame, (x, y), 10, (0, 165, 255), -1)  # Orange dots
+                cv2.circle(frame, (int(x), int(y)), 10, (0, 165, 255), -1)  # Orange dots
 
             # Save the debug image
             debug_filename = 'draw_debug.png'
