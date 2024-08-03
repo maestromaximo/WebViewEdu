@@ -111,7 +111,7 @@ def project_circles(positions):
     return screen
 
 # Function to detect circles and calculate the transformation
-def detect_circles_and_calculate_transform(min_distance=50):
+def detect_circles_and_calculate_transform(min_distance=8):
     image_counter = 0
 
     # Clear the debug folder if it exists
@@ -214,7 +214,7 @@ def detect_circles_and_calculate_transform(min_distance=50):
             time.sleep(0.5)
 
         # Order points to ensure consistency
-        detected_positions = order_points(np.array(filtered_positions, dtype=np.float32))
+        detected_positions = order_points(np.array(filtered_positions, dtype=np.int32))
 
         return detected_positions
 
