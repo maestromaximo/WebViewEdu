@@ -238,34 +238,25 @@ def move_circles_to_corners(screen, initial_positions, target_positions):
     return initial_positions
 
 # Function to apply transformation and project corrected image
+# Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
+    # Load the image to be projected
     image = cv2.imread("example_image.png")
     if image is None:
         print("Failed to load image")
         return
 
+    # Get the dimensions of the image
     height, width = image.shape[:2]
     print("Original image dimensions:", width, height)
     print("Transform Matrix:")
     print(transform_matrix)
 
-    # Apply the transformation to the screen coordinates
-    corners = np.array([
-        [0, 0],
-        [width, 0],
-        [width, height],
-        [0, height]
-    ], dtype=np.float32).reshape(-1, 1, 2)
-    transformed_corners = cv2.perspectiveTransform(corners, transform_matrix)
-
-    print("Transformed corners:")
-    print(transformed_corners)
-
-    # Create a blank screen to display the transformed image
-    blank_image = np.zeros((height, width, 3), np.uint8)
-
-    # Warp the perspective based on the transformed corners
+    # Apply the transformation to the image
     warped_image = cv2.warpPerspective(image, transform_matrix, (width, height))
+
+    # Save the warped image for debugging
+    cv2.imwrite("warped_image.png", warped_image)
 
     # Convert the image to a format suitable for pygame
     warped_image = cv2.cvtColor(warped_image, cv2.COLOR_BGR2RGB)
@@ -285,6 +276,7 @@ def apply_transform_and_project(transform_matrix):
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
                 pygame.quit()
+
 
 def main():
     if DEBUG_BOARD:
