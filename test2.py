@@ -282,7 +282,7 @@ def main():
         transform_func = generate_transformation_function(proj_points, cam_points)
 
         # Apply transformation and project the image
-        cam_corners = [(864, 486), (1056, 486), (864, 594), (1056, 594)]  # Example corners in webcam coordinates  [(200, 200), (1720, 200), (200, 880), (1720, 880)]
+        cam_corners = [(912, 513), (1008, 513), (912, 567), (1008, 567)]  # Example corners in webcam coordinates  [(200, 200), (1720, 200), (200, 880), (1720, 880)]
         apply_transform_and_project("example_image.png", transform_func, cam_corners)
     else:
         print("Failed to calculate transformation matrix")
