@@ -111,7 +111,7 @@ def project_circles(positions):
     return screen
 
 # Function to detect circles and calculate the transformation
-def detect_circles_and_calculate_transform():
+def detect_circles_and_calculate_transform(min_distance=50):
     image_counter = 0
 
     # Clear the debug folder if it exists
@@ -175,10 +175,22 @@ def detect_circles_and_calculate_transform():
                         cY = int(M["m01"] / M["m00"])
                         detected_positions.append((cX, cY))
 
-            if len(detected_positions) == 4:
-                print(f"Detected 4 positions: {detected_positions}")
+            # Filter out circles that are too close to each other
+            filtered_positions = []
+            for pos in detected_positions:
+                if all(np.linalg.norm(np.array(pos) - np.array(existing_pos)) > min_distance for existing_pos in filtered_positions):
+                    filtered_positions.append(pos)
+
+            # If only three points are detected, estimate the fourth point
+            if len(filtered_positions) == 3:
+                p1, p2, p3 = filtered_positions
+                missing_point = estimate_fourth_point(p1, p2, p3)
+                filtered_positions.append(missing_point)
+
+            if len(filtered_positions) == 4:
+                print(f"Detected 4 positions: {filtered_positions}")
                 # Draw green dots at the center of detected positions
-                for (x, y) in detected_positions:
+                for (x, y) in filtered_positions:
                     cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
                 break
 
@@ -202,9 +214,21 @@ def detect_circles_and_calculate_transform():
             time.sleep(0.5)
 
         # Order points to ensure consistency
-        detected_positions = order_points(np.array(detected_positions, dtype=np.float32))
+        detected_positions = order_points(np.array(filtered_positions, dtype=np.float32))
 
         return detected_positions
+
+def estimate_fourth_point(p1, p2, p3):
+    # Calculate the centroid of the three points
+    centroid = np.mean([p1, p2, p3], axis=0)
+    # Find the fourth point as the reflection of the centroid over each pair of points
+    for i in range(3):
+        for j in range(i + 1, 3):
+            if i != j:
+                p4 = 2 * centroid - np.array(p1 if i == 0 else p2 if i == 1 else p3)
+                if not any(np.array_equal(p4, p) for p in [p1, p2, p3]):
+                    return tuple(p4)
+    return p1  # Default, should not happen if three unique points are provided
 
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(image_path, transform_func, cam_corners):
