@@ -86,6 +86,31 @@ def generate_transformation_function(proj_points, cam_points):
     
     return transform_coordinates
 
+# Function to project circles at the corners
+def project_circles(positions):
+    height, width = 1080, 1920  # Assume 1080p resolution for the projector
+    image = np.zeros((height, width, 3), np.uint8)
+    color = (255, 0, 255)  # Purple color in BGR
+    radius = 50  # Slightly larger radius for better visibility
+    thickness = -1  # Filled circles
+
+    for (x, y) in positions:
+        cv2.circle(image, (x, y), radius, color, thickness)
+
+    # Convert the image to a format suitable for pygame
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = np.rot90(image)  # Rotate the image for correct orientation in pygame
+    image = pygame.surfarray.make_surface(image)
+
+    # Initialize pygame and display the image fullscreen
+    pygame.init()
+    screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)  # Explicitly setting resolution to 1920x1080
+    screen.blit(image, (0, 0))
+    pygame.display.flip()
+
+    return screen
+
+# Function to detect circles and calculate the transformation
 def detect_circles_and_calculate_transform():
     image_counter = 0
 
@@ -176,45 +201,10 @@ def detect_circles_and_calculate_transform():
 
             time.sleep(0.5)
 
-        # Expected positions of the circles (adjusted inward)
-        height, width = frame.shape[:2]
-        offset = 100
-        expected_positions = [(offset, offset), (width - offset, offset), (offset, height - offset), (width - offset, height - offset)]
-
         # Order points to ensure consistency
         detected_positions = order_points(np.array(detected_positions, dtype=np.float32))
-        expected_positions = order_points(np.array(expected_positions, dtype=np.float32))
 
-        # Normalize points
-        src_pts = normalize_points(detected_positions)
-        dst_pts = normalize_points(expected_positions)
-
-        # Calculate transformation
-        if len(detected_positions) == 4:
-            transform_matrix, _ = cv2.findHomography(src_pts, dst_pts)
-            print("Transformation matrix:")
-            np.set_printoptions(precision=10, suppress=True)
-            print(transform_matrix)
-
-            # Scale the transformation matrix
-            scale_matrix = np.array([
-                [width, 0, 0],
-                [0, height, 0],
-                [0, 0, 1]
-            ], dtype=np.float32)
-            transform_matrix = np.dot(scale_matrix, transform_matrix)
-            print("Scaled transformation matrix:")
-            print(transform_matrix)
-
-            # Verify the transformation
-            projected_pts = cv2.perspectiveTransform(np.array([src_pts]), transform_matrix)
-            print(f"Projected points: {projected_pts}")
-
-            return transform_matrix, detected_positions
-        else:
-            print("No circles detected or insufficient number of circles, retrying...")
-
-        time.sleep(1)
+        return detected_positions
 
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(image_path, transform_func, cam_corners):
@@ -274,9 +264,18 @@ def main():
         board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
         print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
+    # Initial positions of the circles (slightly inward from the corners)
+    initial_positions = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
+
+    # Project initial circles
+    screen = project_circles(initial_positions)
+
+    # Wait a bit to ensure the projector is displaying the image
+    time.sleep(2)
+
     # Detect circles and calculate the transformation
-    transform_matrix, detected_positions = detect_circles_and_calculate_transform()
-    if transform_matrix is not None:
+    detected_positions = detect_circles_and_calculate_transform()
+    if len(detected_positions) == 4:
         # Generate the transformation function
         cam_points = [(x, y) for x, y in detected_positions]
         proj_points = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
