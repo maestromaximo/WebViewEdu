@@ -244,28 +244,22 @@ def apply_transform_and_project(transform_matrix):
         print("Failed to load image")
         return
 
-    height, width = image.shape[:2]
-    print("Original image dimensions:", width, height)
-    print("Transform Matrix:")
-    print(transform_matrix)
+    # Get the full screen dimensions
+    screen_info = pygame.display.Info()
+    screen_width, screen_height = screen_info.current_w, screen_info.current_h
 
-    # Apply the transformation to the screen coordinates
-    corners = np.array([
-        [0, 0],
-        [width, 0],
-        [width, height],
-        [0, height]
-    ], dtype=np.float32).reshape(-1, 1, 2)
-    transformed_corners = cv2.perspectiveTransform(corners, transform_matrix)
+    # Resize the image to match the screen dimensions
+    image = cv2.resize(image, (screen_width, screen_height))
 
-    print("Transformed corners:")
-    print(transformed_corners)
+    # Apply the transformation to the full screen coordinates
+    src_corners = np.array([[0, 0], [screen_width, 0], [screen_width, screen_height], [0, screen_height]], dtype=np.float32).reshape(-1, 1, 2)
+    dst_corners = cv2.perspectiveTransform(src_corners, transform_matrix)
 
-    # Create a blank screen to display the transformed image
-    blank_image = np.zeros((height, width, 3), np.uint8)
+    # Calculate the new transformation matrix
+    new_transform = cv2.getPerspectiveTransform(src_corners.reshape(-1, 2), dst_corners.reshape(-1, 2))
 
-    # Warp the perspective based on the transformed corners
-    warped_image = cv2.warpPerspective(image, transform_matrix, (width, height))
+    # Warp the perspective based on the new transformation
+    warped_image = cv2.warpPerspective(image, new_transform, (screen_width, screen_height))
 
     # Convert the image to a format suitable for pygame
     warped_image = cv2.cvtColor(warped_image, cv2.COLOR_BGR2RGB)
@@ -274,7 +268,7 @@ def apply_transform_and_project(transform_matrix):
 
     # Initialize pygame and display the image fullscreen
     pygame.init()
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
     screen.blit(warped_image, (0, 0))
     pygame.display.flip()
 
@@ -284,7 +278,7 @@ def apply_transform_and_project(transform_matrix):
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
-                pygame.quit()
+    pygame.quit()
 
 def main():
     if DEBUG_BOARD:
