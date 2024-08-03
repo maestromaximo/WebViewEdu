@@ -4,7 +4,6 @@ import time
 import pygame
 import os
 import shutil
-import threading
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -13,28 +12,12 @@ HF_TOKEN = os.getenv('HF_TOKEN')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Hyperparameters
-ASPECT_RATIO_MIN = 1.5
-ASPECT_RATIO_MAX = 2.5
 DEBUG_VIEW = False
 DEBUG_FEED = True
 VIDEO_PATH = 'C:/Users/aleja/OneDrive/Escritorio/WebViewEdu/test_vid1.mp4'
 AREA_THRESHOLD = 10
-DISTANCE_THRESHOLD = 1
-STABILITY_THRESHOLD = 30
-CONFIRMATION_TIME = 10
-REAPPEARANCE_TIME = 0.5
-CUSHION = 10
-WRITING_CHECK_INTERVAL = 5
-TEXT_DETECTION_URL = "https://aleale2423-textdetector.hf.space/detect"
-MARGIN = 10
-AREA_CHANGE_THRESHOLD = 0.2
-DETAIL_LEVEL = "low"
-ORANGE_THRESHOLD = 50
-DEBUG_BOARD = True  # Set this to True to simulate an average board
-DEBUG_FOLDER_PHOTOS = True  # Set this to True to save processed images with detected circles
-DEBUG_FOLDER_PATH = 'debug_photos'  # Path to the folder where debug photos will be saved
-
-orange_count = 0
+DEBUG_FOLDER_PHOTOS = True
+DEBUG_FOLDER_PATH = 'debug_photos'
 
 def order_points(pts):
     rect = np.zeros((4, 2), dtype="float32")
@@ -215,28 +198,6 @@ def detect_circles_and_calculate_transform(screen, positions):
 
         time.sleep(1)
 
-# Function to move circles to align with the board corners
-def move_circles_to_corners(screen, initial_positions, target_positions):
-    # Calculate the differences between initial positions and target positions
-    deltas = [(tx - ix, ty - iy) for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)]
-
-    while True:
-        for i in range(len(initial_positions)):
-            initial_positions[i] = (
-                initial_positions[i][0] + deltas[i][0] // 10,
-                initial_positions[i][1] + deltas[i][1] // 10
-            )
-
-        screen = project_circles(initial_positions)
-        pygame.display.flip()
-
-        if all(abs(tx - ix) < 10 and abs(ty - iy) < 10 for (ix, iy), (tx, ty) in zip(initial_positions, target_positions)):
-            break
-
-        time.sleep(0.5)
-
-    return initial_positions
-
 # Function to apply transformation and project corrected image
 def apply_transform_and_project(transform_matrix):
     image = cv2.imread("example_image.png")
@@ -244,22 +205,28 @@ def apply_transform_and_project(transform_matrix):
         print("Failed to load image")
         return
 
-    # Get the full screen dimensions
-    screen_info = pygame.display.Info()
-    screen_width, screen_height = screen_info.current_w, screen_info.current_h
+    height, width = image.shape[:2]
+    print("Original image dimensions:", width, height)
+    print("Transform Matrix:")
+    print(transform_matrix)
 
-    # Resize the image to match the screen dimensions
-    image = cv2.resize(image, (screen_width, screen_height))
+    # Apply the transformation to the screen coordinates
+    corners = np.array([
+        [0, 0],
+        [width, 0],
+        [width, height],
+        [0, height]
+    ], dtype=np.float32).reshape(-1, 1, 2)
+    transformed_corners = cv2.perspectiveTransform(corners, transform_matrix)
 
-    # Apply the transformation to the full screen coordinates
-    src_corners = np.array([[0, 0], [screen_width, 0], [screen_width, screen_height], [0, screen_height]], dtype=np.float32).reshape(-1, 1, 2)
-    dst_corners = cv2.perspectiveTransform(src_corners, transform_matrix)
+    print("Transformed corners:")
+    print(transformed_corners)
 
-    # Calculate the new transformation matrix
-    new_transform = cv2.getPerspectiveTransform(src_corners.reshape(-1, 2), dst_corners.reshape(-1, 2))
+    # Create a blank screen to display the transformed image
+    blank_image = np.zeros((height, width, 3), np.uint8)
 
-    # Warp the perspective based on the new transformation
-    warped_image = cv2.warpPerspective(image, new_transform, (screen_width, screen_height))
+    # Warp the perspective based on the transformed corners
+    warped_image = cv2.warpPerspective(image, transform_matrix, (width, height))
 
     # Convert the image to a format suitable for pygame
     warped_image = cv2.cvtColor(warped_image, cv2.COLOR_BGR2RGB)
@@ -268,7 +235,7 @@ def apply_transform_and_project(transform_matrix):
 
     # Initialize pygame and display the image fullscreen
     pygame.init()
-    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     screen.blit(warped_image, (0, 0))
     pygame.display.flip()
 
@@ -278,20 +245,19 @@ def apply_transform_and_project(transform_matrix):
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
-    pygame.quit()
+                pygame.quit()
 
 def main():
-    if DEBUG_BOARD:
-        # Simulate an average board in the middle of the screen
-        height, width = 1080, 1920  # Assume 1080p resolution for the projector
-        board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
-        print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
+    # Simulate an average board in the middle of the screen
+    height, width = 1080, 1920  # Assume 1080p resolution for the projector
+    board_x, board_y, board_w, board_h = int(width * 0.25), int(height * 0.25), int(width * 0.5), int(height * 0.5)
+    print(f"Simulating board at ({board_x}, {board_y}, {board_w}, {board_h})")
 
     # Initial positions of the circles (slightly inward from the corners)
     initial_positions = [(100, 100), (1820, 100), (100, 980), (1820, 980)]
 
     # Expected positions of the circles (board corners)
-    target_positions = [(200, 200), (1720, 200), (200, 880), (1720, 880)]
+    target_positions = [(board_x, board_y), (board_x + board_w, board_y), (board_x, board_y + board_h), (board_x + board_w, board_y + board_h)]
 
     # Project initial circles
     screen = project_circles(initial_positions)
@@ -299,11 +265,8 @@ def main():
     # Wait a bit to ensure the projector is displaying the image
     time.sleep(2)
 
-    # Move circles to align with the board corners
-    final_positions = move_circles_to_corners(screen, initial_positions, target_positions)
-
     # Run the detection and adjustment in the main thread
-    transform_matrix = detect_circles_and_calculate_transform(screen, final_positions)
+    transform_matrix = detect_circles_and_calculate_transform(screen, initial_positions)
     if transform_matrix is not None:
         apply_transform_and_project(transform_matrix)
     else:
