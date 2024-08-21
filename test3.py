@@ -19,14 +19,19 @@ def generate_qr_code(data, size=100):
     qr.add_data(data)
     qr.make(fit=True)
     
+    # Generate the QR code as an image
     img = qr.make_image(fill='black', back_color='white')
-    img = img.resize((size, size), Image.Resampling.LANCZOS)  # Resize the image
-    img = np.array(img)  # Convert to NumPy array
 
-    # Ensure the image is in the correct format for OpenCV
-    if img.ndim == 2:  # If the image is grayscale, add a color dimension
+    # Convert the PIL image to a NumPy array
+    img = np.array(img)
+
+    # Check if the image is grayscale and convert it to BGR if needed
+    if img.ndim == 2:  # Grayscale image
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
+    # Ensure img is a valid NumPy array before returning
+    assert isinstance(img, np.ndarray), "QR code image is not a valid NumPy array."
+    
     return img
 
 # Function to project a QR code using pygame within a small debug board
