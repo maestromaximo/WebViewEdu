@@ -2,9 +2,28 @@ import cv2
 import numpy as np
 import pygame
 import time
+import qrcode
+from PIL import Image
 
 # Initialize QR Code detector
 qr_detector = cv2.QRCodeDetector()
+
+# Function to generate a QR code image
+def generate_qr_code(data, size=100):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill='black', back_color='white')
+    img = img.resize((size, size), Image.ANTIALIAS)
+    img = np.array(img)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # Convert from PIL's RGB to OpenCV's BGR
+    return img
 
 # Function to project a QR code using pygame within a small debug board
 def project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board):
@@ -12,7 +31,7 @@ def project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board):
     image = np.zeros((height, width, 3), np.uint8)
     
     # Generate the QR code image
-    qr_code_image = cv2.QRCodeDetector().encode('Debug QR Code', width=100, height=100)
+    qr_code_image = generate_qr_code('Debug QR Code', size=100)
     
     # Calculate the position of the QR code within the debug board
     qr_x = board_pos[0] + qr_pos_within_board[0]
