@@ -20,7 +20,7 @@ def generate_qr_code(data, size=100):
     qr.make(fit=True)
     
     img = qr.make_image(fill='black', back_color='white')
-    img = img.resize((size, size), Image.ANTIALIAS)
+    img = img.resize((size, size), Image.Resampling.LANCZOS)  # Updated to LANCZOS
     img = np.array(img)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # Convert from PIL's RGB to OpenCV's BGR
     return img
