@@ -28,86 +28,57 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 temp_dir = tempfile.gettempdir()
 
-def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=200):
+def generate_and_detect_markers(num_markers=20, marker_size=200, max_attempts=3):
     projector_points = []
     webcam_points = []
-    detected_markers = set()  # Track detected markers by their IDs
-    marker_id = 0
-
-    while len(detected_markers) < total_markers:
-        marker_positions = []
-        batch_ids = []
-        detected_in_batch = 0
-
-        # Generate a batch of markers, skipping those that have already been detected
-        for _ in range(batch_size):
-            while marker_id in detected_markers or marker_id >= 1000:
-                marker_id = (marker_id + 1) % 1000
-            batch_ids.append(marker_id)
-
-            # Generate marker
-            marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
-            aruco.generateImageMarker(aruco_dict, marker_id, marker_size, marker_img)
-            
-            # Save marker
-            marker_path = os.path.join(temp_dir, f'aruco_marker_{marker_id}.png')
-            cv2.imwrite(marker_path, marker_img)
-            
-            # Find non-overlapping position
-            while True:
-                x = np.random.randint(0, screen_width - marker_size)
-                y = np.random.randint(0, screen_height - marker_size)
-                
-                overlap = False
-                for pos in marker_positions:
-                    if np.linalg.norm(np.array([x, y]) - np.array(pos)) < marker_size:
-                        overlap = True
-                        break
-                
-                if not overlap:
-                    marker_positions.append((x, y))
-                    break
-
-            # Display marker
-            marker_surface = pygame.image.load(marker_path)
-            screen.blit(marker_surface, (x, y))
-            projector_points.append([x + marker_size / 2, y + marker_size / 2])
-            marker_id += 1
-
+    
+    for i in range(num_markers):
+        # Generate marker
+        marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
+        aruco.generateImageMarker(aruco_dict, i, marker_size, marker_img)
+        
+        # Save marker
+        marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
+        cv2.imwrite(marker_path, marker_img)
+        
+        # Display marker
+        x = np.random.randint(0, screen_width - marker_size)
+        y = np.random.randint(0, screen_height - marker_size)
+        marker_surface = pygame.image.load(marker_path)
+        screen.blit(marker_surface, (x, y))
         pygame.display.flip()
-
-        # Start timer
-        start_time = time.time()
-
-        # Detect markers in the batch
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                continue
-
-            corners, ids, _ = aruco_detector.detectMarkers(frame)
-            
-            if ids is not None:
-                for i, detected_id in enumerate(ids.flatten()):
-                    if detected_id in batch_ids:
-                        idx = np.where(ids == detected_id)[0][0]
-                        center = np.mean(corners[idx][0], axis=0)
-                        webcam_points.append(center)
-                        detected_markers.add(detected_id)
-                        detected_in_batch += 1
-
-                        if detected_in_batch >= batch_size / 2 or time.time() - start_time > 3:
-                            break
-            
-            if detected_in_batch >= batch_size / 2 or time.time() - start_time > 3:
+        
+        projector_point = [x + marker_size/2, y + marker_size/2]
+        
+        # Detect marker
+        detected = False
+        for attempt in range(max_attempts):
+            start_time = time.time()
+            while time.time() - start_time < 2:
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                corners, ids, _ = aruco_detector.detectMarkers(frame)
+                if ids is not None and i in ids:
+                    idx = np.where(ids == i)[0][0]
+                    center = np.mean(corners[idx][0], axis=0)
+                    webcam_points.append(center)
+                    projector_points.append(projector_point)
+                    detected = True
+                    break
+            if detected:
                 break
-
-        # Clear screen after each batch
+            print(f"Marker {i} not detected, attempt {attempt + 1}/{max_attempts}")
+        
+        if not detected:
+            print(f"Failed to detect marker {i} after {max_attempts} attempts")
+        
+        # Clear screen
         screen.fill((0, 0, 0))
         pygame.display.flip()
-
-    print(f"Detected {len(webcam_points)}/{total_markers} markers")
-    return np.array(projector_points[:total_markers]), np.array(webcam_points[:total_markers]), marker_id
+    
+    print(f"Detected {len(webcam_points)}/{num_markers} markers")
+    return np.array(projector_points), np.array(webcam_points)
 
 def calculate_homography(src_points, dst_points):
     if len(src_points) < 4 or len(dst_points) < 4:
@@ -141,7 +112,7 @@ def detect_yellow_object(frame):
     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
     
     # Use morphological operations to reduce noise
-    kernel = np.ones((5, 5), np.uint8)
+    kernel = np.ones((5,5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     
@@ -167,7 +138,7 @@ def webcam_process(queue):
 
 def main():
     print("Generating and detecting markers...")
-    projector_points, webcam_points, last_marker_id = generate_and_detect_markers()
+    projector_points, webcam_points = generate_and_detect_markers()
     
     if len(projector_points) < 4 or len(webcam_points) < 4:
         print("Error: Not enough markers detected. Please ensure good lighting conditions and that markers are visible to the camera.")
@@ -210,7 +181,7 @@ def main():
         cv2.destroyAllWindows()
         
         # Remove temporary files
-        for i in range(last_marker_id):
+        for i in range(20):
             marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
             if os.path.exists(marker_path):
                 os.remove(marker_path)
