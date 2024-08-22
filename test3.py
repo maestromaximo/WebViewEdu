@@ -6,17 +6,14 @@ import tempfile
 import os
 import time
 
-def setup_marker_calibration(marker_id=42, marker_size=200, screen_width=None, screen_height=None, max_attempts=5, detection_timeout=7, num_positions=4):
+def get_transformation_function(marker_id=42, marker_size=200, num_positions=4, max_attempts=5):
+    # Initialize pygame for projection
     pygame.init()
     screen_info = pygame.display.Info()
-    
-    # Determine screen dimensions if not provided
-    screen_width = screen_width if screen_width is not None else screen_info.current_w
-    screen_height = screen_height if screen_height is not None else screen_info.current_h
-    
+    screen_width, screen_height = screen_info.current_w, screen_info.current_h
     screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-    
-    # Create ArUco dictionary
+
+    # Create ArUco dictionary and generate the marker
     aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
     
     projector_points = []
@@ -32,7 +29,7 @@ def setup_marker_calibration(marker_id=42, marker_size=200, screen_width=None, s
     aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
     # Process each marker at different positions
-    for _ in range(num_positions):
+    for _ in range(num_positions):  # Four positions to define the homography
         detected = False
         attempt_count = 0
         
@@ -64,7 +61,7 @@ def setup_marker_calibration(marker_id=42, marker_size=200, screen_width=None, s
             start_time = time.time()
 
             # Try to detect the marker
-            while time.time() - start_time < detection_timeout:
+            while time.time() - start_time < 7:
                 ret, frame = cap.read()
                 if not ret:
                     continue
@@ -78,25 +75,25 @@ def setup_marker_calibration(marker_id=42, marker_size=200, screen_width=None, s
                     marker_corners = corners[index][0]
                     detected_position = np.mean(marker_corners, axis=0)
                     webcam_points.append(detected_position)
-                    print(f"Detected marker at position: {detected_position}")
                     detected = True
                     break
 
-            # If the marker wasn't detected in time, regenerate its position
+            # If the marker wasn't detected in 7 seconds, regenerate its position
             if not detected:
-                print(f"Marker not detected in {detection_timeout} seconds, regenerating position.")
                 projector_points.pop()  # Remove the last added point, as it's not valid
 
         if not detected:
-            print(f"Marker failed after {max_attempts} attempts. Moving on.")
+            cap.release()
+            pygame.quit()
+            cv2.destroyAllWindows()
+            return None
 
     # Calculate the homography matrix
-    if len(webcam_points) == num_positions:  # Expecting four points for homography
+    if len(webcam_points) == num_positions:  # Expecting the specified number of points for homography
         projector_points = np.array(projector_points, dtype="float32")
         webcam_points = np.array(webcam_points, dtype="float32")
         homography_matrix, _ = cv2.findHomography(webcam_points, projector_points)
     else:
-        print("Not all points were detected. Unable to calculate homography.")
         cap.release()
         pygame.quit()
         cv2.destroyAllWindows()
@@ -121,10 +118,11 @@ def setup_marker_calibration(marker_id=42, marker_size=200, screen_width=None, s
 
     return translate_coordinates
 
-# Example of using the function
-translate_func = setup_marker_calibration()
-
-if translate_func:
+transformation_function = get_transformation_function()
+if transformation_function:
+    # Now you can use the transformation function
     webcam_position = np.array([200, 100])
-    projector_position = translate_func(webcam_position, to_projector=True)
+    projector_position = transformation_function(webcam_position, to_projector=True)
     print(f"Webcam coordinates: {webcam_position}, Projector coordinates: {projector_position}")
+else:
+    print("Failed to generate the transformation function.")
