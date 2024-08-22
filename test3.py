@@ -58,19 +58,18 @@ def detect_qr_code():
             return center
     return None
 
-# Function to create the mapping function
+# Function to create the mapping function using average offsets
 def create_mapping(projection_pos, detected_pos):
-    dx = detected_pos[0] - projection_pos[0]
-    dy = detected_pos[1] - projection_pos[1]
+    # Compute average offsets
+    dx = np.mean(detected_pos[:, 0] - projection_pos[:, 0])
+    dy = np.mean(detected_pos[:, 1] - projection_pos[:, 1])
 
     def mapping_function(x, y):
-        print("X:", x, "Y:", y, "DX:", dx, "DY:", dy)  # Debug print
-        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray):
-            return np.array(x + dx), np.array(y + dy)
+        # Apply the average offset to scalar coordinates
         return int(x + dx), int(y + dy)
 
-
     return mapping_function
+
 
 
 def project_image_on_board(screen, board_pos, board_size, mapping_func, image_path):
@@ -109,7 +108,7 @@ def project_image_on_board(screen, board_pos, board_size, mapping_func, image_pa
 
 def main():
     board_pos = (300, 200)
-    board_size = (600, 600)
+    board_size = (600, 600)  # Adjusted to fit larger QR code
     qr_pos_within_board = (150, 150)
 
     screen, qr_proj_pos = project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board)
@@ -119,7 +118,11 @@ def main():
 
     if detected_pos:
         print(f"QR Code detected at: {detected_pos}")
-        mapping_func = create_mapping(qr_proj_pos, detected_pos)
+        # Assume qr_proj_pos and detected_pos are arrays of coordinates
+        projection_pos = np.array([qr_proj_pos, (qr_proj_pos[0] + board_size[0], qr_proj_pos[1]),
+                                   (qr_proj_pos[0], qr_proj_pos[1] + board_size[1]),
+                                   (qr_proj_pos[0] + board_size[0], qr_proj_pos[1] + board_size[1])])
+        mapping_func = create_mapping(projection_pos, np.array(detected_pos))
         project_image_on_board(screen, board_pos, board_size, mapping_func, "example_image.png")
     else:
         print("QR Code not detected.")
@@ -131,6 +134,7 @@ def main():
                 running = False
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
