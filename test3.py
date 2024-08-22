@@ -6,7 +6,7 @@ import cv2.aruco as aruco
 cap = cv2.VideoCapture(0)
 
 # Generate an ArUco marker
-aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)
+aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_id = 42  # Any ID between 0 and 249
 marker_size = 200  # Marker size in pixels
 marker_img = aruco.drawMarker(aruco_dict, marker_id, marker_size)
