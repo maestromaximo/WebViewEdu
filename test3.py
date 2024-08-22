@@ -46,12 +46,14 @@ cap = cv2.VideoCapture(0)
 detector_params = aruco.DetectorParameters()
 aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
-# Detect the marker with the camera
-detected_position = None
-while True:
+# Detect the marker with the camera multiple times for stability
+num_detections = 10
+detected_positions = []
+
+for _ in range(num_detections):
     ret, frame = cap.read()
     if not ret:
-        break
+        continue
     
     # Detect markers
     corners, ids, rejected = aruco_detector.detectMarkers(frame)
@@ -63,14 +65,20 @@ while True:
         
         # Assume the first corner (top-left) as the detected position
         detected_position = np.mean(marker_corners, axis=0)
-        print(f"Detected marker position: {detected_position}")
-        
-        break
+        detected_positions.append(detected_position)
+
+# Calculate the average detected position
+if detected_positions:
+    avg_detected_position = np.mean(detected_positions, axis=0)
+    print(f"Detected marker position: {avg_detected_position}")
+else:
+    avg_detected_position = None
+    print("Marker not detected.")
 
 # Print the projected and detected positions
 print(f"Projected position: ({random_x}, {random_y})")
-if detected_position is not None:
-    difference = detected_position - np.array([random_x, random_y])
+if avg_detected_position is not None:
+    difference = avg_detected_position - np.array([random_x, random_y])
     print(f"Difference between projected and detected: {difference}")
 else:
     print("Marker not detected.")
