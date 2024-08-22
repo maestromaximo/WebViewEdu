@@ -31,7 +31,6 @@ def detect_qr_code(debug=False):
     decoded_info, points, _ = qr_detector.detectAndDecode(frame)
     if points is not None:
         points = np.int32(points)
-        center = np.mean(points, axis=0)
         if debug:
             cv2.imwrite('debug_frame.jpg', frame)
         return points.reshape(-1, 2).tolist()  # Reshape and convert to list for easier handling
@@ -42,15 +41,8 @@ def detect_qr_code(debug=False):
         return None
 
 # Function to create the mapping function
-def create_mapping(projection_pos, detected_corners):
-    qr_code_size = 600  # Assuming QR code size is 600x600
-    projected_corners = np.float32([
-        [projection_pos[0], projection_pos[1]], 
-        [projection_pos[0] + qr_code_size, projection_pos[1]],
-        [projection_pos[0] + qr_code_size, projection_pos[1] + qr_code_size],
-        [projection_pos[0], projection_pos[1] + qr_code_size]
-    ])
-    matrix = cv2.getPerspectiveTransform(np.array(detected_corners, dtype=np.float32), projected_corners)
+def create_mapping_to_square(detected_corners, target_square_corners):
+    matrix = cv2.getPerspectiveTransform(np.array(detected_corners, dtype=np.float32), np.array(target_square_corners, dtype=np.float32))
     return matrix
 
 # Function to project an image using a mapping function
@@ -64,7 +56,7 @@ def project_image(screen, matrix, image_path):
     transformed_surface = pygame.surfarray.make_surface(cv2.cvtColor(transformed_img, cv2.COLOR_BGR2RGB))
     screen.blit(transformed_surface, (0, 0))
     pygame.display.flip()
-    print("Image projected using mapping.")
+    print("Image projected within the defined square.")
 
 # Function to generate and project QR code
 def generate_and_project_qr(screen, board_pos, qr_code_size=600):
@@ -99,7 +91,20 @@ def main():
     detected_corners = detect_qr_code(debug=True)
     if detected_corners:
         print(f"Detected QR Code at: {detected_corners}")
-        transform_matrix = create_mapping(qr_position, detected_corners)
+
+        # Define the square in the right middle of the camera view
+        square_size = 300  # Size of the square
+        screen_width, screen_height = 1920, 1080
+
+        # Define target square in the right middle of the screen
+        target_square_corners = [
+            [screen_width - square_size - 50, screen_height // 2 - square_size // 2],  # Top-left
+            [screen_width - 50, screen_height // 2 - square_size // 2],  # Top-right
+            [screen_width - 50, screen_height // 2 + square_size // 2],  # Bottom-right
+            [screen_width - square_size - 50, screen_height // 2 + square_size // 2]  # Bottom-left
+        ]
+
+        transform_matrix = create_mapping_to_square(detected_corners, target_square_corners)
         project_image(screen, transform_matrix, 'example_image.png')
     else:
         print("Failed to detect QR Code.")
