@@ -64,9 +64,14 @@ def create_mapping(projection_pos, detected_pos):
     dy = detected_pos[1] - projection_pos[1]
 
     def mapping_function(x, y):
+        print("X:", x, "Y:", y, "DX:", dx, "DY:", dy)  # Debug print
+        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray):
+            return np.array(x + dx), np.array(y + dy)
         return int(x + dx), int(y + dy)
 
+
     return mapping_function
+
 
 def project_image_on_board(screen, board_pos, board_size, mapping_func, image_path):
     # Load the image
