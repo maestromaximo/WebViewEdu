@@ -17,7 +17,7 @@ aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_size = 200  # Marker size in pixels
 
 # Use four different markers to define corners
-marker_ids = [42, 43, 44, 45]
+marker_ids = [42, 43, 45, 46]
 projector_points = []
 webcam_points = []
 
