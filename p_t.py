@@ -31,13 +31,19 @@ temp_dir = tempfile.gettempdir()
 def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=200):
     projector_points = []
     webcam_points = []
-    detected_markers = 0
+    detected_markers = set()  # Track detected markers by their IDs
     marker_id = 0
 
-    while detected_markers < total_markers:
+    while len(detected_markers) < total_markers:
         marker_positions = []
 
+        # Generate a batch of markers, skipping those that have already been detected
+        batch_ids = []
         for _ in range(batch_size):
+            while marker_id in detected_markers or marker_id >= 1000:
+                marker_id = (marker_id + 1) % 1000
+            batch_ids.append(marker_id)
+
             # Generate marker
             marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
             aruco.generateImageMarker(aruco_dict, marker_id, marker_size, marker_img)
@@ -78,12 +84,12 @@ def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=20
         
         if ids is not None:
             for i, detected_id in enumerate(ids.flatten()):
-                if detected_id < marker_id:
+                if detected_id in batch_ids:
                     idx = np.where(ids == detected_id)[0][0]
                     center = np.mean(corners[idx][0], axis=0)
                     webcam_points.append(center)
-                    detected_markers += 1
-                    if detected_markers >= total_markers:
+                    detected_markers.add(detected_id)
+                    if len(detected_markers) >= total_markers:
                         break
         
         # Clear screen after each batch
@@ -91,7 +97,7 @@ def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=20
         pygame.display.flip()
 
     print(f"Detected {len(webcam_points)}/{total_markers} markers")
-    return np.array(projector_points[:total_markers]), np.array(webcam_points[:total_markers])
+    return np.array(projector_points[:total_markers]), np.array(webcam_points[:total_markers]), marker_id
 
 def calculate_homography(src_points, dst_points):
     if len(src_points) < 4 or len(dst_points) < 4:
@@ -151,7 +157,7 @@ def webcam_process(queue):
 
 def main():
     print("Generating and detecting markers...")
-    projector_points, webcam_points = generate_and_detect_markers()
+    projector_points, webcam_points, last_marker_id = generate_and_detect_markers()
     
     if len(projector_points) < 4 or len(webcam_points) < 4:
         print("Error: Not enough markers detected. Please ensure good lighting conditions and that markers are visible to the camera.")
@@ -194,7 +200,7 @@ def main():
         cv2.destroyAllWindows()
         
         # Remove temporary files
-        for i in range(marker_id):
+        for i in range(last_marker_id):
             marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
             if os.path.exists(marker_path):
                 os.remove(marker_path)
