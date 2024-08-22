@@ -4,6 +4,7 @@ import cv2.aruco as aruco
 import pygame
 import tempfile
 import os
+import time
 
 # Initialize pygame for projection
 pygame.init()
@@ -29,48 +30,56 @@ aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
 # Process each marker
 for marker_id in marker_ids:
-    marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
-    aruco.generateImageMarker(aruco_dict, marker_id, marker_size, marker_img)
-    
-    # Save the marker image temporarily
-    temp_dir = tempfile.gettempdir()
-    marker_path = os.path.join(temp_dir, f'aruco_marker_{marker_id}.png')
-    cv2.imwrite(marker_path, marker_img)
-
-    # Load the marker image using Pygame
-    marker_surface = pygame.image.load(marker_path)
-
-    # Randomize the position on the screen
-    random_x = np.random.randint(0, screen_width - marker_size)
-    random_y = np.random.randint(0, screen_height - marker_size)
-    projector_points.append([random_x, random_y])
-    
-    # Display the marker on the screen
-    screen.fill((0, 0, 0))
-    screen.blit(marker_surface, (random_x, random_y))
-    pygame.display.flip()
-
-    # Detect the marker with the camera
     detected = False
+    
     while not detected:
-        ret, frame = cap.read()
-        if not ret:
-            continue
+        marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
+        aruco.generateImageMarker(aruco_dict, marker_id, marker_size, marker_img)
         
-        # Detect markers
-        corners, ids, rejected = aruco_detector.detectMarkers(frame)
-        
-        # If the specific marker is detected
-        if ids is not None and marker_id in ids:
-            index = np.where(ids == marker_id)[0][0]
-            marker_corners = corners[index][0]
-            detected_position = np.mean(marker_corners, axis=0)
-            webcam_points.append(detected_position)
-            print(f"Detected marker {marker_id} position: {detected_position}")
-            detected = True
+        # Save the marker image temporarily
+        temp_dir = tempfile.gettempdir()
+        marker_path = os.path.join(temp_dir, f'aruco_marker_{marker_id}.png')
+        cv2.imwrite(marker_path, marker_img)
 
-    # Wait briefly before moving to the next marker
-    pygame.time.wait(1000)
+        # Load the marker image using Pygame
+        marker_surface = pygame.image.load(marker_path)
+
+        # Randomize the position on the screen
+        random_x = np.random.randint(0, screen_width - marker_size)
+        random_y = np.random.randint(0, screen_height - marker_size)
+        projector_points.append([random_x, random_y])
+        
+        # Display the marker on the screen
+        screen.fill((0, 0, 0))
+        screen.blit(marker_surface, (random_x, random_y))
+        pygame.display.flip()
+
+        # Start timer
+        start_time = time.time()
+
+        # Try to detect the marker
+        while time.time() - start_time < 7:
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            
+            # Detect markers
+            corners, ids, rejected = aruco_detector.detectMarkers(frame)
+            
+            # If the specific marker is detected
+            if ids is not None and marker_id in ids:
+                index = np.where(ids == marker_id)[0][0]
+                marker_corners = corners[index][0]
+                detected_position = np.mean(marker_corners, axis=0)
+                webcam_points.append(detected_position)
+                print(f"Detected marker {marker_id} position: {detected_position}")
+                detected = True
+                break
+
+        # If the marker wasn't detected in 7 seconds, regenerate its position
+        if not detected:
+            print(f"Marker {marker_id} not detected in 7 seconds, regenerating position.")
+            projector_points.pop()  # Remove the last added point, as it's not valid
 
 # Calculate the homography matrix
 if len(webcam_points) == len(marker_ids):
