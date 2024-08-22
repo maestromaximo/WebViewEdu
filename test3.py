@@ -70,9 +70,37 @@ while True:
 # Print the projected and detected positions
 print(f"Projected position: ({random_x}, {random_y})")
 if detected_position is not None:
-    print(f"Difference between projected and detected: {detected_position - np.array([random_x, random_y])}")
+    difference = detected_position - np.array([random_x, random_y])
+    print(f"Difference between projected and detected: {difference}")
 else:
     print("Marker not detected.")
+    difference = np.array([0, 0])  # Fallback if not detected
+
+# Function to translate coordinates between camera and projector
+def translate_coordinates(point, to_projector=True):
+    if to_projector:
+        return point - difference
+    else:
+        return point + difference
+
+# Example test of the function with an example image
+example_image_path = 'example_image.png'  # Replace with the path to your example image
+example_image = pygame.image.load(example_image_path)
+
+# Desired position in webcam coordinates
+webcam_position = np.array([200, 100])
+
+# Convert the webcam position to projector coordinates
+projector_position = translate_coordinates(webcam_position, to_projector=True)
+print(f"Webcam coordinates: {webcam_position}, Projector coordinates: {projector_position}")
+
+# Project the example image at the calculated projector coordinates
+screen.fill((0, 0, 0))
+screen.blit(example_image, projector_position)
+pygame.display.flip()
+
+# Wait for 5 seconds to see the projection
+pygame.time.wait(5000)
 
 # Cleanup
 cap.release()
