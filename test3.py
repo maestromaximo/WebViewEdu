@@ -51,24 +51,26 @@ def detect_qr_code():
     cap.release()
 
     if ret:
-        decoded_info, points, straight_qrcode = qr_detector.detectAndDecode(frame)
+        decoded_info, points, _ = qr_detector.detectAndDecode(frame)
         if points is not None:
             points = np.int32(points)
-            center = tuple(np.mean(points, axis=0))
+            center = np.mean(points, axis=0)
             return center
     return None
 
+
 # Function to create the mapping function using average offsets
 def create_mapping(projection_pos, detected_pos):
-    # Compute average offsets
-    dx = np.mean(detected_pos[:, 0] - projection_pos[:, 0])
-    dy = np.mean(detected_pos[:, 1] - projection_pos[:, 1])
+    # Calculate the mean of differences if positions are array of points
+    dx = np.mean(detected_pos[0] - projection_pos[0])
+    dy = np.mean(detected_pos[1] - projection_pos[1])
 
     def mapping_function(x, y):
-        # Apply the average offset to scalar coordinates
+        # Apply the mean offset to the coordinates
         return int(x + dx), int(y + dy)
 
     return mapping_function
+
 
 
 
