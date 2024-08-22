@@ -8,7 +8,7 @@ from PIL import Image
 qr_detector = cv2.QRCodeDetector()
 
 # Function to generate a QR code image
-def generate_qr_code(data, size=100):
+def generate_qr_code(data, size=300):  # Increased size for better detection
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -28,10 +28,10 @@ def generate_qr_code(data, size=100):
 # Function to project a QR code using pygame within a small debug board
 def project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board):
     pygame.init()
-    height, width = 1080, 1920
+    height, width = 1080, 1920  # Assume 1080p resolution for the projector
     screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN)
     surface = pygame.Surface((width, height))
-    qr_code_image = generate_qr_code('Debug QR Code', size=100)
+    qr_code_image = generate_qr_code('Debug QR Code', size=300)  # Larger QR code
 
     qr_x = board_pos[0] + qr_pos_within_board[0]
     qr_y = board_pos[1] + qr_pos_within_board[1]
@@ -51,29 +51,11 @@ def detect_qr_code():
     cap.release()
 
     if ret:
-        # Use detectAndDecode which returns three values
         decoded_info, points, straight_qrcode = qr_detector.detectAndDecode(frame)
         if points is not None:
             points = np.int32(points)
             center = tuple(np.mean(points, axis=0))
             return center
-    return None
-
-def detect_qr_codes():
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-    cap.release()
-
-    if ret:
-        # Use detectAndDecodeMulti for multiple QR codes
-        decoded_infos, points = qr_detector.detectAndDecodeMulti(frame)
-        centers = []
-        if points is not None:
-            for point in points:
-                point = np.int32(point)
-                center = tuple(np.mean(point, axis=0))
-                centers.append(center)
-            return centers
     return None
 
 # Function to create the mapping function
@@ -87,9 +69,9 @@ def create_mapping(projection_pos, detected_pos):
     return mapping_function
 
 def main():
-    board_pos = (600, 400)
-    board_size = (400, 300)
-    qr_pos_within_board = (50, 50)
+    board_pos = (300, 200)
+    board_size = (600, 600)  # Adjusted to fit larger QR code
+    qr_pos_within_board = (150, 150)  # Center the QR code within the board
 
     screen, qr_proj_pos = project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board)
 
@@ -100,9 +82,8 @@ def main():
     if detected_pos:
         print(f"QR Code detected at: {detected_pos}")
         mapping_func = create_mapping(qr_proj_pos, detected_pos)
-
-        # Additional function to project any image using the mapping (you can define it based on your needs)
-        # Example: project_test_image(mapping_func, board_pos, board_size)
+        # Here you can use mapping_func to project any image or adjust projections
+        print(f"Mapping function created: {mapping_func}")
     else:
         print("QR Code not detected.")
 
