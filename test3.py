@@ -17,6 +17,9 @@ aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_size = 200  # Marker size in pixels
 marker_id = 42  # Reusing the same marker ID
 
+# Set the number of points to use for homography
+num_points = 12  # Adjust the number of points as needed
+
 projector_points = []
 webcam_points = []
 
@@ -30,7 +33,7 @@ detector_params.maxMarkerPerimeterRate = 4.0
 aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
 # Process each marker at different positions
-for _ in range(4):  # Four positions to define the homography
+for _ in range(num_points):  # Adjust number of positions to the variable `num_points`
     detected = False
     attempt_count = 0
     max_attempts = 5  # Limit the number of regeneration attempts
@@ -90,7 +93,7 @@ for _ in range(4):  # Four positions to define the homography
         print(f"Marker failed after {max_attempts} attempts. Moving on.")
 
 # Calculate the homography matrix
-if len(webcam_points) == 4:  # Expecting four points for homography
+if len(webcam_points) == num_points:  # Expecting the specified number of points for homography
     projector_points = np.array(projector_points, dtype="float32")
     webcam_points = np.array(webcam_points, dtype="float32")
     homography_matrix, _ = cv2.findHomography(webcam_points, projector_points)
