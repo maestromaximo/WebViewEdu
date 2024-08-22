@@ -14,7 +14,7 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 
 # Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-marker_size = 300  # Increase Marker size in pixels for better detection
+marker_size = 300  # Marker size in pixels
 
 # Set the number of points to use for homography
 num_points = 10
@@ -31,8 +31,10 @@ detector_params.minMarkerPerimeterRate = 0.03
 detector_params.maxMarkerPerimeterRate = 4.0
 aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
+temp_dir = tempfile.gettempdir()
+
 def display_and_detect_markers():
-    global projector_points  # Add this line to declare the global variable
+    global projector_points
     for _ in range(num_points):
         # Display 4 markers
         marker_positions = []
@@ -41,9 +43,16 @@ def display_and_detect_markers():
             random_y = np.random.randint(0, screen_height - marker_size)
             marker_positions.append((random_x, random_y))
             projector_points.append([random_x, random_y])
+
+            # Generate and save the marker image temporarily
             marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
             aruco.generateImageMarker(aruco_dict, i, marker_size, marker_img)
-            marker_surface = pygame.image.load(os.path.join(temp_dir, f'aruco_marker_{i}.png'))
+            
+            marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
+            cv2.imwrite(marker_path, marker_img)
+
+            # Load the marker image using Pygame
+            marker_surface = pygame.image.load(marker_path)
             screen.blit(marker_surface, (random_x, random_y))
 
         pygame.display.flip()
@@ -77,7 +86,6 @@ def display_and_detect_markers():
     return len(webcam_points)
 
 # Run the detection loop and calculate the homography
-temp_dir = tempfile.gettempdir()  # Set up the temp directory
 total_detected_points = display_and_detect_markers()
 
 if total_detected_points >= 4:
@@ -166,4 +174,6 @@ cv2.destroyAllWindows()
 
 # Remove the temporary files
 for i in range(4):
-    os.remove(os.path.join(temp_dir, f'aruco_marker_{i}.png'))
+    marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
+    if os.path.exists(marker_path):
+        os.remove(marker_path)
