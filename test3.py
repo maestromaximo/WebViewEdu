@@ -17,22 +17,28 @@ qr_detector = cv2.QRCodeDetector()
 
 
 # Function to detect the QR code
-def detect_qr_code():
-    cap = cv2.VideoCapture(0)
+def detect_qr_code(debug=False):
+    cap = cv2.VideoCapture(0)  # Adjust the device index if needed
     ret, frame = cap.read()
     cap.release()
 
-    if ret:
-        decoded_info, points, _ = qr_detector.detectAndDecode(frame)
-        if points is not None:
-            points = np.int32(points)
-            center = np.mean(points, axis=0)
-            print("QR Code detected.")
-            return center, frame
-        else:
-            print("No QR Code detected. Saving frame for debug.")
-            cv2.imwrite(os.path.join(debug_photos, 'failed_detection.jpg'), frame)
-    return None, frame
+    if not ret:
+        print("Failed to capture video frame")
+        return None
+
+    # Save the frame for debugging
+    if debug:
+        cv2.imwrite('debug_frame.jpg', frame)
+
+    decoded_info, points, _ = qr_detector.detectAndDecode(frame)
+    if points is not None:
+        points = np.int32(points)
+        center = np.mean(points, axis=0)
+        return center
+    else:
+        print("QR Code not detected. Check debug_frame.jpg for analysis.")
+        return None
+
 
 # Function to create the mapping function
 def create_mapping(projection_pos, detected_pos):
@@ -88,18 +94,20 @@ def generate_and_project_qr(screen, board_pos, board_size, qr_code_size=300):
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((1920, 1080))
+    screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)
 
     board_pos = (300, 200)
     board_size = (600, 600)
 
-    qr_position, qr_img = generate_and_project_qr(screen, board_pos, board_size)
+    generate_and_project_qr(screen, board_pos, board_size)
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                running = False
+    detected_center = detect_qr_code(debug=True)
+
+    if detected_center:
+        print(f"Detected QR Code at: {detected_center}")
+    else:
+        print("Failed to detect QR Code.")
+
     pygame.quit()
 
 if __name__ == "__main__":
