@@ -12,16 +12,15 @@ screen_info = pygame.display.Info()
 screen_width, screen_height = screen_info.current_w, screen_info.current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 
-# Create ArUco dictionary and generate the markers
+# Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_size = 200  # Marker size in pixels
 
 # Use four different markers to define corners
 marker_ids = [42, 43, 44, 45]
 projector_points = []
-marker_surfaces = []
 
-# Generate four markers at random positions
+# Generate and project four markers at random positions
 for marker_id in marker_ids:
     marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
     aruco.generateImageMarker(aruco_dict, marker_id, marker_size, marker_img)
@@ -33,21 +32,17 @@ for marker_id in marker_ids:
 
     # Load the marker image using Pygame
     marker_surface = pygame.image.load(marker_path)
-    marker_surfaces.append(marker_surface)
 
     # Randomize the position on the screen
     random_x = random.randint(0, screen_width - marker_size)
     random_y = random.randint(0, screen_height - marker_size)
     projector_points.append([random_x, random_y])
-
-# Display all markers simultaneously
-screen.fill((0, 0, 0))
-for i, marker_surface in enumerate(marker_surfaces):
-    screen.blit(marker_surface, (projector_points[i][0], projector_points[i][1]))
-pygame.display.flip()
-
-# Wait for 2 seconds to ensure the projection is visible
-pygame.time.wait(2000)
+    
+    # Clear the screen and project the marker at the random location
+    screen.fill((0, 0, 0))
+    screen.blit(marker_surface, (random_x, random_y))
+    pygame.display.flip()
+    pygame.time.wait(1000)
 
 # Initialize the camera
 cap = cv2.VideoCapture(0)
