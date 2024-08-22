@@ -10,7 +10,7 @@ from scipy.optimize import least_squares
 # Initialize pygame for projection
 pygame.init()
 screen_info = pygame.display.Info()
-screen_width, screen_height = screen_info.current_w, screen_height = screen_info.current_h
+screen_width, screen_height = screen_info.current_w, screen_info.current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 
 # Create ArUco dictionary and generate the marker
