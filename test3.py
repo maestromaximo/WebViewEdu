@@ -68,40 +68,45 @@ def project_image(screen, mapping_func, image_path):
     pygame.display.flip()
     print("Image projected using mapping.")
 
-def generate_and_project_qr(screen, board_pos, qr_code_size=600):  # Increased QR code size
+def generate_and_project_qr(screen, board_pos, qr_code_size=600):  # Default size set to 600
+    # Initialize QR code with high error correction and specified dimensions
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,  # Highest error correction
+        error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction
         box_size=10,
         border=4,
     )
     qr.add_data('Debug QR Code')
     qr.make(fit=True)
 
+    # Convert QR code to an image
     img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-    img = img.resize((qr_code_size, qr_code_size), Image.Resampling.LANCZOS)
+    img = img.resize((qr_code_size, qr_code_size), Image.Resampling.LANCZOS)  # Ensure qr_code_size is an integer
     img = np.array(img, dtype=np.uint8)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    # Center the QR code on the screen
-    screen_center = (screen.get_width() // 2, screen.get_height() // 2)
-    qr_top_left = (screen_center[0] - qr_code_size // 2, screen_center[1] - qr_code_size // 2)
+    # Determine top-left corner of the QR code on the screen
+    qr_x = board_pos[0]
+    qr_y = board_pos[1]
 
+    # Convert image for Pygame and blit it onto the screen
     img_surface = pygame.surfarray.make_surface(img.swapaxes(0, 1))
-    screen.blit(img_surface, qr_top_left)
-    pygame.display.flip()
+    screen.blit(img_surface, (qr_x, qr_y))
+    pygame.display.flip()  # Update the display
 
-    return qr_top_left, (qr_code_size, qr_code_size)
+    return (qr_x, qr_y), img
+
 
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((1920, 1080))
 
-    board_pos = (300, 200)
-    board_size = (600, 600)
+    board_pos = (300, 200)  # Top-left corner of the QR code
+    qr_code_size = 600      # Size of the QR code to generate
 
-    generate_and_project_qr(screen, board_pos, board_size)
+    qr_position, qr_img = generate_and_project_qr(screen, board_pos, qr_code_size)
+    
     
     time.sleep(4)
 
