@@ -36,9 +36,10 @@ def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=20
 
     while len(detected_markers) < total_markers:
         marker_positions = []
+        batch_ids = []
+        detected_in_batch = 0
 
         # Generate a batch of markers, skipping those that have already been detected
-        batch_ids = []
         for _ in range(batch_size):
             while marker_id in detected_markers or marker_id >= 1000:
                 marker_id = (marker_id + 1) % 1000
@@ -75,23 +76,32 @@ def generate_and_detect_markers(total_markers=120, batch_size=20, marker_size=20
 
         pygame.display.flip()
 
-        # Detect markers in a single frame
-        ret, frame = cap.read()
-        if not ret:
-            continue
+        # Start timer
+        start_time = time.time()
 
-        corners, ids, _ = aruco_detector.detectMarkers(frame)
-        
-        if ids is not None:
-            for i, detected_id in enumerate(ids.flatten()):
-                if detected_id in batch_ids:
-                    idx = np.where(ids == detected_id)[0][0]
-                    center = np.mean(corners[idx][0], axis=0)
-                    webcam_points.append(center)
-                    detected_markers.add(detected_id)
-                    if len(detected_markers) >= total_markers:
-                        break
-        
+        # Detect markers in the batch
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                continue
+
+            corners, ids, _ = aruco_detector.detectMarkers(frame)
+            
+            if ids is not None:
+                for i, detected_id in enumerate(ids.flatten()):
+                    if detected_id in batch_ids:
+                        idx = np.where(ids == detected_id)[0][0]
+                        center = np.mean(corners[idx][0], axis=0)
+                        webcam_points.append(center)
+                        detected_markers.add(detected_id)
+                        detected_in_batch += 1
+
+                        if detected_in_batch >= batch_size / 2 or time.time() - start_time > 3:
+                            break
+            
+            if detected_in_batch >= batch_size / 2 or time.time() - start_time > 3:
+                break
+
         # Clear screen after each batch
         screen.fill((0, 0, 0))
         pygame.display.flip()
