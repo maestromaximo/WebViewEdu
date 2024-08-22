@@ -5,6 +5,7 @@ import pygame
 import tempfile
 import random
 import os
+import time
 
 # Initialize pygame for projection
 pygame.init()
@@ -49,7 +50,8 @@ aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 # Detect the marker with the camera multiple times for stability
 num_detections = 10
 detected_positions = []
-
+# Wait for 4 seconds
+time.sleep(4)
 for _ in range(num_detections):
     ret, frame = cap.read()
     if not ret:
