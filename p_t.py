@@ -43,6 +43,10 @@ def display_and_detect_markers():
             if os.path.exists(marker_path):
                 os.remove(marker_path)
         
+        # Clear the screen before displaying new markers
+        screen.fill((0, 0, 0))
+        pygame.display.flip()
+
         # Display 4 markers
         marker_positions = []
         for i in range(4):
