@@ -31,7 +31,6 @@ def detect_qr_code(debug=False):
     decoded_info, points, _ = qr_detector.detectAndDecode(frame)
     if points is not None:
         points = np.int32(points)
-        center = np.mean(points, axis=0)
         if debug:
             cv2.imwrite('debug_frame.jpg', frame)
         return points.reshape(-1, 2).tolist()  # Reshape and convert to list for easier handling
@@ -51,6 +50,13 @@ def create_mapping(projection_pos, detected_corners):
         [projection_pos[0], projection_pos[1] + qr_code_size]
     ])
     matrix = cv2.getPerspectiveTransform(np.array(detected_corners, dtype=np.float32), projected_corners)
+    
+    # Debug: Print the mapping results for the corners
+    print("\nMapping Debug Information:")
+    for i, corner in enumerate(detected_corners):
+        mapped_corner = cv2.perspectiveTransform(np.array([[corner]], dtype=np.float32), matrix)[0][0]
+        print(f"Detected Corner {i}: {corner} -> Projected Corner {i}: {mapped_corner.tolist()}")
+    
     return matrix
 
 # Function to project an image using a mapping function
