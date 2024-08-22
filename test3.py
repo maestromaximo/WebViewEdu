@@ -17,7 +17,7 @@ aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_size = 200  # Marker size in pixels
 
 # Use four different markers to define corners
-marker_ids = [42, 43, 45, 46]
+marker_ids = [42, 43, 44, 45]
 projector_points = []
 webcam_points = []
 
@@ -26,6 +26,8 @@ cap = cv2.VideoCapture(0)
 
 # Initialize ArUco Detector
 detector_params = aruco.DetectorParameters()
+detector_params.minMarkerPerimeterRate = 0.03  # Adjusted perimeter rate for better detection
+detector_params.maxMarkerPerimeterRate = 4.0
 aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
 # Process each marker
