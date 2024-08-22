@@ -68,22 +68,54 @@ def create_mapping(projection_pos, detected_pos):
 
     return mapping_function
 
+def project_image_on_board(screen, board_pos, board_size, mapping_func, image_path):
+    # Load the image
+    img = cv2.imread(image_path)
+    if img is None:
+        print("Failed to load image")
+        return
+
+    # Define the corners of the image in the image's coordinate system
+    img_height, img_width = img.shape[:2]
+    img_corners = np.float32([[0, 0], [img_width, 0], [img_width, img_height], [0, img_height]])
+
+    # Define the corners of the board in the projected coordinate system
+    board_corners = np.float32([
+        [board_pos[0], board_pos[1]],
+        [board_pos[0] + board_size[0], board_pos[1]],
+        [board_pos[0] + board_size[0], board_pos[1] + board_size[1]],
+        [board_pos[0], board_pos[1] + board_size[1]]
+    ])
+
+    # Map these board corners using the mapping function
+    mapped_corners = np.float32([mapping_func(x, y) for x, y in board_corners])
+
+    # Compute the transformation matrix
+    matrix = cv2.getPerspectiveTransform(img_corners, mapped_corners)
+
+    # Warp the image using the transformation matrix
+    transformed_img = cv2.warpPerspective(img, matrix, (1920, 1080))
+
+    # Convert the image to a format suitable for pygame and display it
+    transformed_img = cv2.cvtColor(transformed_img, cv2.COLOR_BGR2RGB)
+    transformed_surface = pygame.surfarray.make_surface(transformed_img)
+    screen.blit(transformed_surface, (0, 0))
+    pygame.display.flip()
+
 def main():
     board_pos = (300, 200)
-    board_size = (600, 600)  # Adjusted to fit larger QR code
-    qr_pos_within_board = (150, 150)  # Center the QR code within the board
+    board_size = (600, 600)
+    qr_pos_within_board = (150, 150)
 
     screen, qr_proj_pos = project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board)
 
-    # Wait a bit to ensure the QR code is visible and then detect
     pygame.time.wait(2000)
     detected_pos = detect_qr_code()
 
     if detected_pos:
         print(f"QR Code detected at: {detected_pos}")
         mapping_func = create_mapping(qr_proj_pos, detected_pos)
-        # Here you can use mapping_func to project any image or adjust projections
-        print(f"Mapping function created: {mapping_func}")
+        project_image_on_board(screen, board_pos, board_size, mapping_func, "example_image.png")
     else:
         print("QR Code not detected.")
 
