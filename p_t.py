@@ -18,7 +18,7 @@ aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 marker_size = 310  # Marker size in pixels
 
 # Set the number of points to use for homography
-num_points = 100  # Increase number of points for better accuracy
+num_points = 200  # Increase number of points for better accuracy
 min_distance = marker_size  # Minimum distance between markers to avoid overlap
 
 projector_points = []
@@ -94,7 +94,6 @@ def display_and_detect_markers():
 
         # Attempt to detect the markers
         start_time = time.time()
-        detected_points = 0
         while time.time() - start_time < 4:
             ret, frame = cap.read()
             if not ret:
@@ -110,21 +109,19 @@ def display_and_detect_markers():
                 for corner_set in corners:
                     cv2.cornerSubPix(gray_frame, corner_set, (11, 11), (-1, -1), criteria)
 
-                detected_points = len(ids)
                 for id in ids:
                     index = np.where(ids == id)[0][0]
                     marker_corners = corners[index][0]
                     detected_position = np.mean(marker_corners, axis=0)
                     current_webcam_points.append(detected_position)
-                break
 
-        if detected_points >= 3:
+        if current_webcam_points:
             homography_matrix, _ = cv2.findHomography(np.array(current_webcam_points, dtype="float32"), np.array(current_projector_points, dtype="float32"), cv2.RANSAC, 5.0)
             homographies.append(homography_matrix)
             projector_points.extend(current_projector_points)
             webcam_points.extend(current_webcam_points)
         else:
-            print("Not enough markers detected for this set, moving to next.")
+            print("No markers detected for this set, moving to next.")
 
     return len(webcam_points)
 
