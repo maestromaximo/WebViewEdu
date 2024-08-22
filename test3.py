@@ -36,6 +36,7 @@ difference = None
 while True:
     ret, frame = cap.read()
     if not ret:
+        print("Failed to capture frame.")
         break
     
     # Detect markers
@@ -58,9 +59,14 @@ while True:
         print(f"Difference between projected and detected: {difference}")
         
         break
+    else:
+        print("No marker detected, continuing...")
 
 # Function to translate coordinates between camera and projector
 def translate_coordinates(point, to_projector=True):
+    if difference is None:
+        print("No difference calculated, cannot translate coordinates.")
+        return point
     if to_projector:
         return point - difference
     else:
@@ -121,7 +127,7 @@ else:
 running = True
 while running:
     for event in pygame.event.get():
-        if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+        if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             running = False
 
 # Cleanup
