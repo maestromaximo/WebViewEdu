@@ -1,104 +1,76 @@
 import cv2
 import numpy as np
-import pygame
-import os
-import shutil
-import time
+import cv2.aruco as aruco
 
-# Ensure debug_photos directory is clean
-debug_photos = 'debug_photos'
-if os.path.exists(debug_photos):
-    shutil.rmtree(debug_photos)
-os.makedirs(debug_photos)
+# Initialize the camera
+cap = cv2.VideoCapture(0)
 
-# Initialize ArUco detector
-aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-aruco_params = cv2.aruco.DetectorParameters()
+# Generate an ArUco marker
+aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)
+marker_id = 42  # Any ID between 0 and 249
+marker_size = 200  # Marker size in pixels
+marker_img = aruco.drawMarker(aruco_dict, marker_id, marker_size)
 
-# Function to detect ArUco marker
-def detect_aruco_marker(debug=False):
-    cap = cv2.VideoCapture(0)  # Adjust the device index if needed
+# Save the marker image
+cv2.imwrite('aruco_marker.png', marker_img)
+
+# Project the marker using the projector (this part depends on your setup)
+# Assuming you have a function to project the image (e.g., displaying it full screen on the projector)
+# For simplicity, we assume the projector projects to the screen as is
+# Display the image (you can customize this part for your projector)
+cv2.imshow('Marker', marker_img)
+cv2.waitKey(1000)  # Display for 1 second
+
+# Detect the marker with the camera
+while True:
     ret, frame = cap.read()
-    cap.release()
-
     if not ret:
-        print("Failed to capture video frame")
-        if debug:
-            cv2.imwrite('debug_frame.jpg', frame)
-        return None
+        break
+    
+    # Convert the frame to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    # Detect the ArUco marker
+    corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict)
+    
+    # If marker detected
+    if ids is not None and marker_id in ids:
+        index = np.where(ids == marker_id)[0][0]
+        marker_corners = corners[index][0]
+        
+        # Assume the first corner (top-left) as the detected position
+        detected_position = np.mean(marker_corners, axis=0)
+        print(f"Detected marker position: {detected_position}")
+        
+        # Let's assume the marker was projected at the center of the projector screen
+        # Replace this with the actual projection coordinates
+        projector_position = np.array([marker_size / 2, marker_size / 2])
+        
+        # Calculate the difference
+        difference = detected_position - projector_position
+        print(f"Difference between projected and detected: {difference}")
+        
+        break
 
-    corners, ids, _ = cv2.aruco.detectMarkers(frame, aruco_dict, parameters=aruco_params)
-    if ids is not None:
-        if debug:
-            cv2.imwrite('debug_frame.jpg', frame)
-        return corners[0][0].tolist()  # Return the first detected marker's corners
+# Define a function to translate coordinates
+def translate_coordinates(point, to_projector=True):
+    """
+    Translates a point between camera and projector coordinate systems.
+    
+    :param point: The point to translate (x, y)
+    :param to_projector: If True, translates from camera to projector; otherwise, reverse.
+    :return: Translated point (x', y')
+    """
+    if to_projector:
+        return point - difference
     else:
-        if debug:
-            cv2.imwrite('debug_frame.jpg', frame)
-        print("ArUco marker not detected. Check debug_frame.jpg for analysis.")
-        return None
+        return point + difference
 
-# Function to create the mapping function
-def create_mapping_to_square(detected_corners, target_square_corners):
-    matrix = cv2.getPerspectiveTransform(np.array(detected_corners, dtype=np.float32), np.array(target_square_corners, dtype=np.float32))
-    return matrix
+# Example test of the function
+camera_point = np.array([150, 150])
+projector_point = translate_coordinates(camera_point, to_projector=True)
+print(f"Camera point: {camera_point}, Projector point: {projector_point}")
 
-# Function to project an image using a mapping function
-def project_image(screen, matrix, image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        print("Failed to load image.")
-        return
-
-    transformed_img = cv2.warpPerspective(img, matrix, (1920, 1080))
-    transformed_surface = pygame.surfarray.make_surface(cv2.cvtColor(transformed_img, cv2.COLOR_BGR2RGB))
-    screen.blit(transformed_surface, (0, 0))
-    pygame.display.flip()
-    print("Image projected within the defined square.")
-
-def main():
-    pygame.init()
-    screen = pygame.display.set_mode((1920, 1080))
-    board_pos = (300, 200)  # Position where ArUco marker is projected
-
-    # Generate an ArUco marker and project it
-    marker_id = 0
-    marker_size = 600  # Size of the marker
-    marker_img = cv2.aruco.drawMarker(aruco_dict, marker_id, marker_size)
-    marker_surface = pygame.surfarray.make_surface(cv2.cvtColor(marker_img, cv2.COLOR_GRAY2RGB).swapaxes(0, 1))
-    screen.blit(marker_surface, board_pos)
-    pygame.display.flip()
-
-    time.sleep(4)  # Allow time for the marker to be stable on screen
-
-    detected_corners = detect_aruco_marker(debug=True)
-    if detected_corners:
-        print(f"Detected ArUco marker at: {detected_corners}")
-
-        # Define the square in the right middle of the camera view
-        square_size = 300  # Size of the square
-        screen_width, screen_height = 1920, 1080
-
-        # Define target square in the right middle of the screen
-        target_square_corners = [
-            [screen_width - square_size - 50, screen_height // 2 - square_size // 2],  # Top-left
-            [screen_width - 50, screen_height // 2 - square_size // 2],  # Top-right
-            [screen_width - 50, screen_height // 2 + square_size // 2],  # Bottom-right
-            [screen_width - square_size - 50, screen_height // 2 + square_size // 2]  # Bottom-left
-        ]
-
-        transform_matrix = create_mapping_to_square(detected_corners, target_square_corners)
-        project_image(screen, transform_matrix, 'example_image.png')
-    else:
-        print("Failed to detect ArUco marker.")
-
-    # Keep the window open until closed by the user
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                running = False
-    pygame.quit()
-
-if __name__ == "__main__":
-    main()
+# Cleanup
+cap.release()
+cv2.destroyAllWindows()
