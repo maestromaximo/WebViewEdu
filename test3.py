@@ -25,18 +25,20 @@ def detect_qr_code(debug=False):
 
     if not ret:
         print("Failed to capture video frame")
+        if debug:
+            cv2.imwrite('debug_frame.jpg', frame)
         return None
-
-    # Save the frame for debugging
-    if debug:
-        cv2.imwrite('debug_frame.jpg', frame)
 
     decoded_info, points, _ = qr_detector.detectAndDecode(frame)
     if points is not None:
         points = np.int32(points)
         center = np.mean(points, axis=0)
-        return center
+        if debug:
+            cv2.imwrite('debug_frame.jpg', frame)
+        return center.tolist()  # Convert center to list to avoid numpy array in Boolean context
     else:
+        if debug:
+            cv2.imwrite('debug_frame.jpg', frame)
         print("QR Code not detected. Check debug_frame.jpg for analysis.")
         return None
 
@@ -107,17 +109,17 @@ def main():
 
     qr_position, qr_img = generate_and_project_qr(screen, board_pos, qr_code_size)
     
-    
-    time.sleep(4)
+    time.sleep(4)  # Wait for QR code to be stable on screen
 
     detected_center = detect_qr_code(debug=True)
 
-    if detected_center:
+    if detected_center is not None:  # Explicit check for None
         print(f"Detected QR Code at: {detected_center}")
     else:
         print("Failed to detect QR Code.")
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
