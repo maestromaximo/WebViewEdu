@@ -14,10 +14,10 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 
 # Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-marker_size = 300  # Marker size in pixels
+marker_size = 350  # Marker size in pixels
 
 # Set the number of points to use for homography
-num_points = 10
+num_points = 30
 
 projector_points = []
 webcam_points = []
