@@ -5,6 +5,7 @@ import pygame
 import tempfile
 import os
 import time
+from scipy.optimize import least_squares
 
 # Initialize pygame for projection
 pygame.init()
@@ -25,6 +26,11 @@ webcam_points = []
 
 # Initialize the camera
 cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Error: Could not open camera.")
+    pygame.quit()
+    cv2.destroyAllWindows()
+    exit()
 
 # Initialize ArUco Detector with tuned parameters
 detector_params = aruco.DetectorParameters()
@@ -92,6 +98,14 @@ def display_and_detect_markers():
             
             corners, ids, rejected = aruco_detector.detectMarkers(frame)
             if ids is not None:
+                corners = np.array(corners, dtype=np.float32)
+                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                # Refine corner positions for subpixel accuracy
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                for corner_set in corners:
+                    cv2.cornerSubPix(gray_frame, corner_set, (11, 11), (-1, -1), criteria)
+
                 detected_points = len(ids)
                 for id in ids:
                     index = np.where(ids == id)[0][0]
@@ -122,6 +136,35 @@ if total_detected_points >= 4:
     # Refine with LMEDS for higher accuracy
     homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.LMEDS)
     print("Homography matrix refined with LMEDS.")
+
+    # Calculate reprojection error and filter outliers
+    def calculate_reprojection_error(points1, points2, homography_matrix):
+        projected_points = cv2.perspectiveTransform(np.array([points1]), homography_matrix)[0]
+        error = np.linalg.norm(projected_points - points2, axis=1)
+        return error
+
+    errors = calculate_reprojection_error(webcam_points, projector_points, homography_matrix)
+    threshold = np.mean(errors) + np.std(errors)
+    filtered_indices = np.where(errors < threshold)[0]
+    webcam_points_filtered = webcam_points[filtered_indices]
+    projector_points_filtered = projector_points[filtered_indices]
+
+    # Recalculate homography with filtered points
+    homography_matrix, _ = cv2.findHomography(webcam_points_filtered, projector_points_filtered, cv2.RANSAC, 5.0)
+    print("Homography matrix recalculated with filtered points.")
+
+    # Use Levenberg-Marquardt optimization for further refinement
+    def homography_residual(h, src_points, dst_points):
+        h_matrix = h.reshape((3, 3))
+        projected_points = cv2.perspectiveTransform(np.array([src_points]), h_matrix)[0]
+        residuals = projected_points - dst_points
+        return residuals.flatten()
+
+    initial_h = homography_matrix.flatten()
+    result = least_squares(homography_residual, initial_h, args=(webcam_points_filtered, projector_points_filtered))
+    refined_homography = result.x.reshape((3, 3))
+    homography_matrix = refined_homography
+    print("Homography matrix optimized with Levenberg-Marquardt.")
 else:
     print("Not enough points were detected. Unable to calculate homography.")
     cap.release()
@@ -169,40 +212,43 @@ def detect_yellow_center(frame):
     return None  # Return None if no yellow object is detected
 
 # Main loop for yellow detection and projection
-while True:
-    ret, frame = cap.read()
+try:
+    while True:
+        ret, frame = cap.read()
 
-    if not ret:
-        break
+        if not ret:
+            break
 
-    # Detect yellow center in the frame
-    yellow_center = detect_yellow_center(frame)
+        # Detect yellow center in the frame
+        yellow_center = detect_yellow_center(frame)
 
-    if yellow_center is not None:
-        print(f"Yellow object detected at: {yellow_center}")
-        
-        # Convert the yellow center from webcam to projector coordinates
-        projector_position = translate_coordinates(yellow_center, to_projector=True)
-        print(f"Projector coordinates: {projector_position}")
+        if yellow_center is not None:
+            print(f"Yellow object detected at: {yellow_center}")
+            
+            # Convert the yellow center from webcam to projector coordinates
+            projector_position = translate_coordinates(yellow_center, to_projector=True)
+            print(f"Projector coordinates: {projector_position}")
 
-        # Project a green circle at the calculated projector coordinates
-        screen.fill((0, 0, 0))
-        pygame.draw.circle(screen, (0, 255, 0), (int(projector_position[0]), int(projector_position[1])), 10)
-        pygame.display.flip()
-    else:
-        print("No yellow object detected")
+            # Check if the position is within the screen bounds
+            if 0 <= projector_position[0] <= screen_width and 0 <= projector_position[1] <= screen_height:
+                # Project a green circle at the calculated projector coordinates
+                screen.fill((0, 0, 0))
+                pygame.draw.circle(screen, (0, 255, 0), (int(projector_position[0]), int(projector_position[1])), 10)
+                pygame.display.flip()
+        else:
+            print("No yellow object detected")
 
-    # Press 'q' to exit the loop
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        # Press 'q' to exit the loop
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+finally:
+    # Cleanup
+    cap.release()
+    pygame.quit()
+    cv2.destroyAllWindows()
 
-# Cleanup
-cap.release()
-pygame.quit()
-cv2.destroyAllWindows()
-
-# Remove the temporary files
-for i in range(4):
-    marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
-    if os.path.exists(marker_path):
-        os.remove(marker_path)
+    # Remove the temporary files
+    for i in range(4):
+        marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
+        if os.path.exists(marker_path):
+            os.remove(marker_path)
