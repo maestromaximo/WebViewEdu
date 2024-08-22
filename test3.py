@@ -5,6 +5,7 @@ import qrcode
 from PIL import Image
 import os
 import shutil
+import time
 
 # Ensure debug_photos directory is clean
 debug_photos = 'debug_photos'
@@ -100,6 +101,8 @@ def main():
     board_size = (600, 600)
 
     generate_and_project_qr(screen, board_pos, board_size)
+    
+    time.sleep(4)
 
     detected_center = detect_qr_code(debug=True)
 
