@@ -28,7 +28,7 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 temp_dir = tempfile.gettempdir()
 
-def generate_and_detect_markers(num_markers=20, marker_size=200):
+def generate_and_detect_markers(num_markers=20, marker_size=200, max_attempts=3):
     projector_points = []
     webcam_points = []
     
@@ -48,33 +48,50 @@ def generate_and_detect_markers(num_markers=20, marker_size=200):
         screen.blit(marker_surface, (x, y))
         pygame.display.flip()
         
-        projector_points.append([x + marker_size/2, y + marker_size/2])
+        projector_point = [x + marker_size/2, y + marker_size/2]
         
         # Detect marker
-        start_time = time.time()
-        while time.time() - start_time < 2:
-            ret, frame = cap.read()
-            if not ret:
-                continue
-            corners, ids, _ = aruco_detector.detectMarkers(frame)
-            if ids is not None and i in ids:
-                idx = np.where(ids == i)[0][0]
-                center = np.mean(corners[idx][0], axis=0)
-                webcam_points.append(center)
+        detected = False
+        for attempt in range(max_attempts):
+            start_time = time.time()
+            while time.time() - start_time < 2:
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                corners, ids, _ = aruco_detector.detectMarkers(frame)
+                if ids is not None and i in ids:
+                    idx = np.where(ids == i)[0][0]
+                    center = np.mean(corners[idx][0], axis=0)
+                    webcam_points.append(center)
+                    projector_points.append(projector_point)
+                    detected = True
+                    break
+            if detected:
                 break
+            print(f"Marker {i} not detected, attempt {attempt + 1}/{max_attempts}")
+        
+        if not detected:
+            print(f"Failed to detect marker {i} after {max_attempts} attempts")
         
         # Clear screen
         screen.fill((0, 0, 0))
         pygame.display.flip()
     
+    print(f"Detected {len(webcam_points)}/{num_markers} markers")
     return np.array(projector_points), np.array(webcam_points)
 
 def calculate_homography(src_points, dst_points):
     if len(src_points) < 4 or len(dst_points) < 4:
-        raise ValueError("Not enough points to calculate homography")
+        raise ValueError(f"Not enough points to calculate homography. Found {len(src_points)} points.")
+    
+    if src_points.shape != dst_points.shape:
+        raise ValueError(f"Mismatch in point array shapes. src_points: {src_points.shape}, dst_points: {dst_points.shape}")
     
     # Use RANSAC for initial estimation
-    H, _ = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0, maxIters=2000)
+    H, mask = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0, maxIters=2000)
+    
+    if H is None:
+        raise ValueError("Failed to calculate homography with RANSAC")
     
     # Refine with Levenberg-Marquardt
     H, _ = cv2.findHomography(src_points, dst_points, cv2.LMEDS)
@@ -122,6 +139,10 @@ def webcam_process(queue):
 def main():
     print("Generating and detecting markers...")
     projector_points, webcam_points = generate_and_detect_markers()
+    
+    if len(projector_points) < 4 or len(webcam_points) < 4:
+        print("Error: Not enough markers detected. Please ensure good lighting conditions and that markers are visible to the camera.")
+        return
     
     print("Calculating homography...")
     try:
