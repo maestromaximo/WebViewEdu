@@ -51,11 +51,29 @@ def detect_qr_code():
     cap.release()
 
     if ret:
-        retval, decoded_info, points, _ = qr_detector.detectAndDecode(frame)
+        # Use detectAndDecode which returns three values
+        decoded_info, points, straight_qrcode = qr_detector.detectAndDecode(frame)
         if points is not None:
             points = np.int32(points)
             center = tuple(np.mean(points, axis=0))
             return center
+    return None
+
+def detect_qr_codes():
+    cap = cv2.VideoCapture(0)
+    ret, frame = cap.read()
+    cap.release()
+
+    if ret:
+        # Use detectAndDecodeMulti for multiple QR codes
+        decoded_infos, points = qr_detector.detectAndDecodeMulti(frame)
+        centers = []
+        if points is not None:
+            for point in points:
+                point = np.int32(point)
+                center = tuple(np.mean(point, axis=0))
+                centers.append(center)
+            return centers
     return None
 
 # Function to create the mapping function
