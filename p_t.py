@@ -32,6 +32,7 @@ detector_params.maxMarkerPerimeterRate = 4.0
 aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 
 def display_and_detect_markers():
+    global projector_points  # Add this line to declare the global variable
     for _ in range(num_points):
         # Display 4 markers
         marker_positions = []
