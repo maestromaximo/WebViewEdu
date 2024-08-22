@@ -74,7 +74,8 @@ def translate_coordinates(point, to_projector=True):
 
 # Initialize Pygame for projection
 pygame.init()
-screen = pygame.display.set_mode((1920, 1080))
+screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)  # Fullscreen mode
+pygame.mouse.set_visible(False)  # Hide mouse cursor in fullscreen
 
 # Display the marker in Pygame
 marker_surface = pygame.surfarray.make_surface(marker_img_bgr.swapaxes(0, 1))
