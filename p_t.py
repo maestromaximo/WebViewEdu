@@ -28,7 +28,7 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 temp_dir = tempfile.gettempdir()
 
-def generate_and_detect_markers(num_markers=20, marker_size=200, max_attempts=3):
+def generate_and_detect_markers(num_markers=20, marker_size=400, max_attempts=2):
     projector_points = []
     webcam_points = []
     
@@ -54,7 +54,7 @@ def generate_and_detect_markers(num_markers=20, marker_size=200, max_attempts=3)
         detected = False
         for attempt in range(max_attempts):
             start_time = time.time()
-            while time.time() - start_time < 2:
+            while time.time() - start_time < 3:
                 ret, frame = cap.read()
                 if not ret:
                     continue
