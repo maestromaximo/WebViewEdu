@@ -14,10 +14,10 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 
 # Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-marker_size = 310  # Marker size in pixels
+marker_size = 300  # Marker size in pixels
 
 # Set the number of points to use for homography
-num_points = 50
+num_points = 50  # Increase number of points for better accuracy
 min_distance = marker_size  # Minimum distance between markers to avoid overlap
 
 projector_points = []
@@ -37,7 +37,7 @@ temp_dir = tempfile.gettempdir()
 def display_and_detect_markers():
     global projector_points
 
-    for _ in range(num_points):
+    for _ in range(num_points // 4):  # Loop to place and detect markers in groups of 4
         # Remove any previous marker files
         for i in range(4):
             marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
@@ -116,8 +116,12 @@ total_detected_points = display_and_detect_markers()
 if total_detected_points >= 4:
     projector_points = np.array(projector_points[:total_detected_points], dtype="float32")
     webcam_points = np.array(webcam_points, dtype="float32")
-    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points)
-    print("Homography matrix calculated successfully.")
+    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.RANSAC, 5.0)
+    print("Homography matrix calculated with RANSAC.")
+
+    # Refine with LMEDS for higher accuracy
+    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.LMEDS)
+    print("Homography matrix refined with LMEDS.")
 else:
     print("Not enough points were detected. Unable to calculate homography.")
     cap.release()
