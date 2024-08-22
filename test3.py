@@ -45,7 +45,7 @@ def project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board):
     return screen, (qr_x, qr_y)
 
 # Function to detect the QR code and find its center
-def detect_qr_code():
+def detect_qr_code(save_failed_attempts=False):
     cap = cv2.VideoCapture(0)
     ret, frame = cap.read()
     cap.release()
@@ -56,7 +56,12 @@ def detect_qr_code():
             points = np.int32(points)
             center = np.mean(points, axis=0)
             return center
+        else:
+            if save_failed_attempts:
+                # Save the frame for later analysis if no QR code is detected
+                cv2.imwrite('failed_qr_detection_frame.jpg', frame)
     return None
+
 
 
 # Function to create the mapping function using average offsets
@@ -109,33 +114,37 @@ def project_image_on_board(screen, board_pos, board_size, mapping_func, image_pa
     pygame.display.flip()
 
 def main():
+    print("Starting projection...")
     board_pos = (300, 200)
     board_size = (600, 600)  # Adjusted to fit larger QR code
     qr_pos_within_board = (150, 150)
 
     screen, qr_proj_pos = project_qr_code_on_debug_board(board_pos, board_size, qr_pos_within_board)
+    print("QR Code projected. Waiting for detection...")
 
-    pygame.time.wait(2000)
+    pygame.time.wait(2000)  # Wait to ensure the QR code is visible
     detected_pos = detect_qr_code()
 
     if detected_pos:
         print(f"QR Code detected at: {detected_pos}")
-        # Assume qr_proj_pos and detected_pos are arrays of coordinates
+        print("Calculating mapping...")
         projection_pos = np.array([qr_proj_pos, (qr_proj_pos[0] + board_size[0], qr_proj_pos[1]),
                                    (qr_proj_pos[0], qr_proj_pos[1] + board_size[1]),
                                    (qr_proj_pos[0] + board_size[0], qr_proj_pos[1] + board_size[1])])
         mapping_func = create_mapping(projection_pos, np.array(detected_pos))
+        print("Mapping calculated. Projecting image...")
         project_image_on_board(screen, board_pos, board_size, mapping_func, "example_image.png")
     else:
-        print("QR Code not detected.")
+        print("QR Code not detected. Please check camera settings and QR code visibility.")
 
     running = True
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+            if event.type is pygame.QUIT or (event.type is pygame.KEYDOWN and event.key is pygame.K_ESCAPE):
                 running = False
 
     pygame.quit()
+
 
 
 if __name__ == "__main__":
