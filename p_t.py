@@ -35,7 +35,14 @@ temp_dir = tempfile.gettempdir()
 
 def display_and_detect_markers():
     global projector_points
+
     for _ in range(num_points):
+        # Remove any previous marker files
+        for i in range(4):
+            marker_path = os.path.join(temp_dir, f'aruco_marker_{i}.png')
+            if os.path.exists(marker_path):
+                os.remove(marker_path)
+        
         # Display 4 markers
         marker_positions = []
         for i in range(4):
