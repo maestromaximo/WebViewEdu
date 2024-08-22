@@ -12,8 +12,8 @@ if os.path.exists(debug_photos):
 os.makedirs(debug_photos)
 
 # Initialize ArUco detector
-aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
-aruco_params = cv2.aruco.DetectorParameters_create()
+aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+aruco_params = cv2.aruco.DetectorParameters()
 
 # Function to detect ArUco marker
 def detect_aruco_marker(debug=False):
