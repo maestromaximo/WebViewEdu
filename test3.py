@@ -15,29 +15,6 @@ os.makedirs(debug_photos)
 # Initialize QR Code detector
 qr_detector = cv2.QRCodeDetector()
 
-# Function to generate and project a QR code image
-def generate_and_project_qr(screen, board_pos, board_size, qr_code_size=300):
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data('Debug QR Code')
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-    img = img.resize((qr_code_size, qr_code_size), Image.Resampling.LANCZOS)
-    img = np.array(img, dtype=np.uint8)
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    
-    # Project the QR code on the board
-    qr_x, qr_y = board_pos
-    surface = pygame.Surface((1080, 1920))
-    surface.blit(pygame.surfarray.make_surface(img), (qr_x, qr_y))
-    screen.blit(surface, (0, 0))
-    pygame.display.flip()
-    return img, (qr_x, qr_y)
 
 # Function to detect the QR code
 def detect_qr_code():
@@ -84,25 +61,44 @@ def project_image(screen, mapping_func, image_path):
     pygame.display.flip()
     print("Image projected using mapping.")
 
+def generate_and_project_qr(screen, board_pos, board_size, qr_code_size=300):
+    # Generate QR Code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data('Debug QR Code')
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    img = img.resize((qr_code_size, qr_code_size), Image.Resampling.LANCZOS)
+    img = np.array(img, dtype=np.uint8)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+    # Convert numpy image to Pygame surface
+    img_surface = pygame.surfarray.make_surface(img.swapaxes(0, 1))
+    img_x, img_y = board_pos
+
+    # Blit QR code to the screen at the specified position
+    screen.blit(img_surface, (img_x, img_y))
+    pygame.display.flip()  # Update the display
+    return (img_x, img_y), img
+
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((1080, 1920), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((1920, 1080))
+
     board_pos = (300, 200)
     board_size = (600, 600)
 
-    _, projection_pos = generate_and_project_qr(screen, board_pos, board_size)
-    detected_pos, _ = detect_qr_code()
-
-    if detected_pos:
-        mapping_func = create_mapping(np.array(projection_pos), np.array(detected_pos))
-        project_image(screen, mapping_func, 'example_image.png')
-    else:
-        print("Failed to detect QR code.")
+    qr_position, qr_img = generate_and_project_qr(screen, board_pos, board_size)
 
     running = True
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
     pygame.quit()
 
