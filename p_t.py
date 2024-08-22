@@ -10,19 +10,20 @@ from scipy.optimize import least_squares
 # Initialize pygame for projection
 pygame.init()
 screen_info = pygame.display.Info()
-screen_width, screen_height = screen_info.current_w, screen_info.current_h
+screen_width, screen_height = screen_info.current_w, screen_height = screen_info.current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 
 # Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-marker_size = 300  # Marker size in pixels
+marker_size = 310  # Marker size in pixels
 
 # Set the number of points to use for homography
-num_points = 50  # Increase number of points for better accuracy
+num_points = 100  # Increase number of points for better accuracy
 min_distance = marker_size  # Minimum distance between markers to avoid overlap
 
 projector_points = []
 webcam_points = []
+homographies = []
 
 # Initialize the camera
 cap = cv2.VideoCapture(0)
@@ -41,7 +42,7 @@ aruco_detector = aruco.ArucoDetector(aruco_dict, detector_params)
 temp_dir = tempfile.gettempdir()
 
 def display_and_detect_markers():
-    global projector_points
+    global projector_points, homographies
 
     for _ in range(num_points // 4):  # Loop to place and detect markers in groups of 4
         # Remove any previous marker files
@@ -56,6 +57,9 @@ def display_and_detect_markers():
 
         # Display 4 markers with non-overlapping positions
         marker_positions = []
+        current_projector_points = []
+        current_webcam_points = []
+
         for i in range(4):
             # Find a non-overlapping position
             while True:
@@ -73,7 +77,7 @@ def display_and_detect_markers():
                     marker_positions.append((random_x, random_y))
                     break
 
-            projector_points.append([random_x, random_y])
+            current_projector_points.append([random_x, random_y])
 
             # Generate and save the marker image temporarily
             marker_img = np.zeros((marker_size, marker_size, 1), dtype="uint8")
@@ -91,7 +95,7 @@ def display_and_detect_markers():
         # Attempt to detect the markers
         start_time = time.time()
         detected_points = 0
-        while time.time() - start_time < 7:
+        while time.time() - start_time < 4:
             ret, frame = cap.read()
             if not ret:
                 continue
@@ -111,60 +115,45 @@ def display_and_detect_markers():
                     index = np.where(ids == id)[0][0]
                     marker_corners = corners[index][0]
                     detected_position = np.mean(marker_corners, axis=0)
-                    webcam_points.append(detected_position)
+                    current_webcam_points.append(detected_position)
                 break
 
         if detected_points >= 3:
-            break  # Move on if 3 or more markers are detected
-        elif detected_points > 0:
-            print(f"Only {detected_points} markers detected, adding their positions.")
+            homography_matrix, _ = cv2.findHomography(np.array(current_webcam_points, dtype="float32"), np.array(current_projector_points, dtype="float32"), cv2.RANSAC, 5.0)
+            homographies.append(homography_matrix)
+            projector_points.extend(current_projector_points)
+            webcam_points.extend(current_webcam_points)
         else:
-            print("No markers detected, regenerating positions.")
-            projector_points = projector_points[:-4]  # Remove the last 4 points
+            print("Not enough markers detected for this set, moving to next.")
 
     return len(webcam_points)
 
-# Run the detection loop and calculate the homography
+# Run the detection loop and calculate multiple homographies
 total_detected_points = display_and_detect_markers()
 
-if total_detected_points >= 4:
-    projector_points = np.array(projector_points[:total_detected_points], dtype="float32")
-    webcam_points = np.array(webcam_points, dtype="float32")
-    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.RANSAC, 5.0)
-    print("Homography matrix calculated with RANSAC.")
+# Function to calculate reprojection error for each homography
+def calculate_homography_error(homography, src_points, dst_points):
+    projected_points = cv2.perspectiveTransform(np.array([src_points]), homography)[0]
+    error = np.linalg.norm(projected_points - dst_points, axis=1)
+    return error.mean()
 
-    # Refine with LMEDS for higher accuracy
-    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.LMEDS)
-    print("Homography matrix refined with LMEDS.")
+# Outlier detection and averaging homographies
+if total_detected_points >= 4 and homographies:
+    homography_errors = [calculate_homography_error(h, webcam_points, projector_points) for h in homographies]
+    error_threshold = np.mean(homography_errors) + np.std(homography_errors)
+    non_outlier_homographies = [h for h, e in zip(homographies, homography_errors) if e < error_threshold]
 
-    # Calculate reprojection error and filter outliers
-    def calculate_reprojection_error(points1, points2, homography_matrix):
-        projected_points = cv2.perspectiveTransform(np.array([points1]), homography_matrix)[0]
-        error = np.linalg.norm(projected_points - points2, axis=1)
-        return error
-
-    errors = calculate_reprojection_error(webcam_points, projector_points, homography_matrix)
-    threshold = np.mean(errors) + np.std(errors)
-    filtered_indices = np.where(errors < threshold)[0]
-    webcam_points_filtered = webcam_points[filtered_indices]
-    projector_points_filtered = projector_points[filtered_indices]
-
-    # Recalculate homography with filtered points
-    homography_matrix, _ = cv2.findHomography(webcam_points_filtered, projector_points_filtered, cv2.RANSAC, 5.0)
-    print("Homography matrix recalculated with filtered points.")
-
-    # Use Levenberg-Marquardt optimization for further refinement
-    def homography_residual(h, src_points, dst_points):
-        h_matrix = h.reshape((3, 3))
-        projected_points = cv2.perspectiveTransform(np.array([src_points]), h_matrix)[0]
-        residuals = projected_points - dst_points
-        return residuals.flatten()
-
-    initial_h = homography_matrix.flatten()
-    result = least_squares(homography_residual, initial_h, args=(webcam_points_filtered, projector_points_filtered))
-    refined_homography = result.x.reshape((3, 3))
-    homography_matrix = refined_homography
-    print("Homography matrix optimized with Levenberg-Marquardt.")
+    # Averaging the non-outlier homographies
+    if non_outlier_homographies:
+        averaged_homography = np.mean(non_outlier_homographies, axis=0)
+        homography_matrix = averaged_homography
+        print("Homography matrix calculated and averaged from non-outlier sets.")
+    else:
+        print("All homographies were identified as outliers. Cannot calculate a reliable homography.")
+        cap.release()
+        pygame.quit()
+        cv2.destroyAllWindows()
+        exit()
 else:
     print("Not enough points were detected. Unable to calculate homography.")
     cap.release()
