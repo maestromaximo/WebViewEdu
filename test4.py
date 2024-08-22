@@ -110,31 +110,61 @@ if center_position is None:
     cv2.destroyAllWindows()
     exit()
 
-# Move marker to each corner of the rectangle and save the corresponding projector coordinates
-projector_rect_coords = []
+# Function to randomly place the marker on the screen
+def random_position():
+    return (
+        np.random.randint(0, screen_width - marker_size),
+        np.random.randint(0, screen_height - marker_size)
+    )
 
-for i, (wx, wy) in enumerate(webcam_rect_coords):
+# Move marker to each corner of the rectangle and save the corresponding projector coordinates
+projector_rect_coords = [None] * 4  # Initialize with None
+
+# Priority: Diagonal corners first
+priority_indices = [0, 2, 1, 3]  # Order: top-left, bottom-right, top-right, bottom-left
+
+for i in priority_indices:
+    wx, wy = webcam_rect_coords[i]
     print(f"Moving marker to match webcam rectangle corner {i + 1}")
     
-    # Calculate the offset to move the marker towards the webcam corner
-    offset_x = wx - center_position[0]
-    offset_y = wy - center_position[1]
-    
-    # Project the marker at the calculated offset
-    moved_x = int(center_x + offset_x)
-    moved_y = int(center_y + offset_y)
-    
+    if i in [0, 2]:  # Diagonal corners
+        # Calculate the offset to move the marker towards the webcam corner
+        offset_x = wx - center_position[0]
+        offset_y = wy - center_position[1]
+        
+        # Project the marker at the calculated offset
+        moved_x = int(center_x + offset_x)
+        moved_y = int(center_y + offset_y)
+    else:
+        # Randomly place the marker on the screen
+        moved_x, moved_y = random_position()
+
     final_position = project_and_detect(moved_x, moved_y)
     
     if final_position is not None:
-        projector_rect_coords.append((moved_x, moved_y))
+        projector_rect_coords[i] = (moved_x, moved_y)
+        # If both diagonals are found, infer the other two corners
+        if i in [0, 2] and projector_rect_coords[0] and projector_rect_coords[2]:
+            inferred_coords = [
+                (projector_rect_coords[0][0], projector_rect_coords[2][1]),
+                (projector_rect_coords[2][0], projector_rect_coords[0][1])
+            ]
+            projector_rect_coords[1], projector_rect_coords[3] = inferred_coords
+            break
     else:
-        print(f"Failed to match corner {i + 1} after moving marker.")
+        # If detection failed, keep moving the marker randomly until detected
+        while final_position is None:
+            moved_x, moved_y = random_position()
+            final_position = project_and_detect(moved_x, moved_y)
+        projector_rect_coords[i] = (moved_x, moved_y)
 
 # Print the projector coordinates for the rectangle
 print("Projector coordinates for the rectangle corners:")
 for i, coord in enumerate(projector_rect_coords):
-    print(f"Corner {i + 1}: {coord}")
+    if coord:
+        print(f"Corner {i + 1}: {coord}")
+    else:
+        print(f"Corner {i + 1}: Not determined")
 
 # Cleanup
 cap.release()
