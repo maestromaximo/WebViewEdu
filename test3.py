@@ -68,11 +68,10 @@ def project_image(screen, mapping_func, image_path):
     pygame.display.flip()
     print("Image projected using mapping.")
 
-def generate_and_project_qr(screen, board_pos, board_size, qr_code_size=300):
-    # Generate QR Code
+def generate_and_project_qr(screen, board_pos, qr_code_size=600):  # Increased QR code size
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,  # Highest error correction
         box_size=10,
         border=4,
     )
@@ -84,14 +83,16 @@ def generate_and_project_qr(screen, board_pos, board_size, qr_code_size=300):
     img = np.array(img, dtype=np.uint8)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    # Convert numpy image to Pygame surface
-    img_surface = pygame.surfarray.make_surface(img.swapaxes(0, 1))
-    img_x, img_y = board_pos
+    # Center the QR code on the screen
+    screen_center = (screen.get_width() // 2, screen.get_height() // 2)
+    qr_top_left = (screen_center[0] - qr_code_size // 2, screen_center[1] - qr_code_size // 2)
 
-    # Blit QR code to the screen at the specified position
-    screen.blit(img_surface, (img_x, img_y))
-    pygame.display.flip()  # Update the display
-    return (img_x, img_y), img
+    img_surface = pygame.surfarray.make_surface(img.swapaxes(0, 1))
+    screen.blit(img_surface, qr_top_left)
+    pygame.display.flip()
+
+    return qr_top_left, (qr_code_size, qr_code_size)
+
 
 def main():
     pygame.init()
