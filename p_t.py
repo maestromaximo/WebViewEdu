@@ -14,10 +14,11 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 
 # Create ArUco dictionary and generate the marker
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-marker_size = 350  # Marker size in pixels
+marker_size = 300  # Marker size in pixels
 
 # Set the number of points to use for homography
-num_points = 30
+num_points = 10
+min_distance = marker_size  # Minimum distance between markers to avoid overlap
 
 projector_points = []
 webcam_points = []
@@ -47,12 +48,25 @@ def display_and_detect_markers():
         screen.fill((0, 0, 0))
         pygame.display.flip()
 
-        # Display 4 markers
+        # Display 4 markers with non-overlapping positions
         marker_positions = []
         for i in range(4):
-            random_x = np.random.randint(0, screen_width - marker_size)
-            random_y = np.random.randint(0, screen_height - marker_size)
-            marker_positions.append((random_x, random_y))
+            # Find a non-overlapping position
+            while True:
+                random_x = np.random.randint(0, screen_width - marker_size)
+                random_y = np.random.randint(0, screen_height - marker_size)
+                
+                # Check for overlap with existing markers
+                overlap = False
+                for pos in marker_positions:
+                    if np.linalg.norm(np.array([random_x, random_y]) - np.array(pos)) < min_distance:
+                        overlap = True
+                        break
+                
+                if not overlap:
+                    marker_positions.append((random_x, random_y))
+                    break
+
             projector_points.append([random_x, random_y])
 
             # Generate and save the marker image temporarily
