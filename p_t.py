@@ -116,7 +116,7 @@ total_detected_points = display_and_detect_markers()
 if total_detected_points >= 4:
     projector_points = np.array(projector_points[:total_detected_points], dtype="float32")
     webcam_points = np.array(webcam_points, dtype="float32")
-    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points, cv2.RANSAC)
+    homography_matrix, _ = cv2.findHomography(webcam_points, projector_points)
     print("Homography matrix calculated successfully.")
 else:
     print("Not enough points were detected. Unable to calculate homography.")
