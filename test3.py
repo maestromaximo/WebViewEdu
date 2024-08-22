@@ -18,7 +18,7 @@ marker_size = 200  # Marker size in pixels
 marker_id = 42  # Reusing the same marker ID
 
 # Set the number of points to use for homography
-num_points = 12  # Adjust the number of points as needed
+num_points = 10
 
 projector_points = []
 webcam_points = []
@@ -93,12 +93,13 @@ for _ in range(num_points):  # Adjust number of positions to the variable `num_p
         print(f"Marker failed after {max_attempts} attempts. Moving on.")
 
 # Calculate the homography matrix
-if len(webcam_points) == num_points:  # Expecting the specified number of points for homography
+if len(webcam_points) >= 4:  # At least four points required for homography
     projector_points = np.array(projector_points, dtype="float32")
     webcam_points = np.array(webcam_points, dtype="float32")
     homography_matrix, _ = cv2.findHomography(webcam_points, projector_points)
+    print("Homography matrix calculated successfully.")
 else:
-    print("Not all points were detected. Unable to calculate homography.")
+    print("Not enough points were detected. Unable to calculate homography.")
     cap.release()
     pygame.quit()
     cv2.destroyAllWindows()
